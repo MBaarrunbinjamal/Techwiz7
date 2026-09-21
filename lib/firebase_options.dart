@@ -46,6 +46,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '798557469278',
     projectId: 'techwiz-6a7de',
     authDomain: 'techwiz-6a7de.firebaseapp.com',
+    databaseURL: 'https://techwiz-6a7de-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'techwiz-6a7de.firebasestorage.app',
     measurementId: 'G-V3GW3959T3',
   );
@@ -55,6 +56,7 @@ class DefaultFirebaseOptions {
     appId: '1:798557469278:android:59cc3a53920063791212cf',
     messagingSenderId: '798557469278',
     projectId: 'techwiz-6a7de',
+    databaseURL: 'https://techwiz-6a7de-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'techwiz-6a7de.firebasestorage.app',
   );
   static const FirebaseOptions ios = FirebaseOptions(
@@ -62,6 +64,7 @@ class DefaultFirebaseOptions {
     appId: '1:798557469278:ios:5ec7625f99eab09c1212cf',
     messagingSenderId: '798557469278',
     projectId: 'techwiz-6a7de',
+    databaseURL: 'https://techwiz-6a7de-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'techwiz-6a7de.firebasestorage.app',
     iosBundleId: 'com.example.techwiz7',
   );
@@ -70,6 +73,7 @@ class DefaultFirebaseOptions {
     appId: '1:798557469278:ios:5ec7625f99eab09c1212cf',
     messagingSenderId: '798557469278',
     projectId: 'techwiz-6a7de',
+    databaseURL: 'https://techwiz-6a7de-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'techwiz-6a7de.firebasestorage.app',
     iosBundleId: 'com.example.techwiz7',
   );
@@ -80,6 +84,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '798557469278',
     projectId: 'techwiz-6a7de',
     authDomain: 'techwiz-6a7de.firebaseapp.com',
+    databaseURL: 'https://techwiz-6a7de-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'techwiz-6a7de.firebasestorage.app',
     measurementId: 'G-5EWBKDVJDV',
   );

@@ -1,4 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -13,17 +15,34 @@ class AuthService {
   Future<UserCredential> signUp({
     required String email,
     required String password,
+    required String firstname,
+    required String lastname
   }) async {
-    return await _auth.createUserWithEmailAndPassword(
+    final userCredential =  await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
     );
+    final token = await FirebaseMessaging.instance.getToken();
+    await userCredential.user!.sendEmailVerification();
+    final userid = await userCredential.user!.uid;
+    final collection = FirebaseDatabase.instance.ref('users/$userid');
+    collection.push().set({
+     "FirstName":firstname,
+      "LastName":lastname,
+      "Email":email,
+      "password":password,
+      "Role":"User",
+      "token":token
+
+    });
+    return userCredential;
   }
 
   // Sign in with email and password
   Future<UserCredential> signIn({
     required String email,
     required String password,
+
   }) async {
     return await _auth.signInWithEmailAndPassword(
       email: email,
