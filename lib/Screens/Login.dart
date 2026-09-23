@@ -84,7 +84,7 @@ class _Login extends State<Login>{
                       ),
                     );
 
-                    return;
+                 Navigator.pushReplacementNamed(context,"/home" );
                   }on FirebaseAuthException catch(e){
                     print(e.code);
                   }

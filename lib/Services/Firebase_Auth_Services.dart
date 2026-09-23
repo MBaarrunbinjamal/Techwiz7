@@ -22,7 +22,7 @@ class AuthService {
       email: email,
       password: password,
     );
-    final token = await FirebaseMessaging.instance.getToken();
+
     await userCredential.user!.sendEmailVerification();
     final userid = await userCredential.user!.uid;
     final collection = FirebaseDatabase.instance.ref('users/$userid');
@@ -32,7 +32,7 @@ class AuthService {
       "Email":email,
       "password":password,
       "Role":"User",
-      "token":token
+      // "token":token
 
     });
     return userCredential;
