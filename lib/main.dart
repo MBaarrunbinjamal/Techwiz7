@@ -7,8 +7,11 @@ import 'package:techwiz7/Screens/Home.dart';
 import 'package:techwiz7/Screens/Login.dart';
 import 'package:techwiz7/Screens/Register.dart';
 import 'package:techwiz7/Screens/Spalsh.dart';
+import 'package:techwiz7/Screens/ai_assistant.dart';
 import 'package:techwiz7/Screens/chose.dart';
 import 'package:techwiz7/Screens/emailverification.dart';
+import 'package:techwiz7/Screens/learning_hub.dart';
+import 'package:techwiz7/Screens/savings_goals.dart';
 import 'package:techwiz7/Services/permisions_service.dart';
 import 'package:techwiz7/firebase_options.dart';
 void main() async{
@@ -24,7 +27,7 @@ permisions().getnotificationpermision();
   runApp(MaterialApp(
 
     debugShowCheckedModeBanner: false,
-    home: Splash(),
+    home: LearningScreen(),
     routes: {
       '/home':(context)=> Authguard(Home()),
       '/chose':(context)=> chose(),
