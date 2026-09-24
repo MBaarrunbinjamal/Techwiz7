@@ -12,7 +12,6 @@ import 'package:techwiz7/Screens/emailverification.dart';
 import 'package:techwiz7/Services/permisions_service.dart';
 import 'package:techwiz7/firebase_options.dart';
 import 'package:techwiz7/screens/admin/admin_main.dart';
-import 'package:techwiz7/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,13 +25,11 @@ void main() async {
   permisions().getnotificationpermision();
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
-    theme: AppTheme.lightTheme,
-    darkTheme: AppTheme.darkTheme,
-    home: Splash(),
+    home: AdminMain(),
     routes: {
       '/home': (context) => Authguard(Home()),
       '/chose': (context) => chose(),
-      '/register': (context) => Register(),
+      '/register': (context) => RegisterScreen(),
       '/login': (context) => Login(),
       '/email': (context) => emailverification(),
       '/admin': (context) => const AdminMain(),
