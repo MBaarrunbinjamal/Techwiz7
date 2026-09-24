@@ -11,7 +11,10 @@ import 'package:techwiz7/Screens/chose.dart';
 import 'package:techwiz7/Screens/emailverification.dart';
 import 'package:techwiz7/Services/permisions_service.dart';
 import 'package:techwiz7/firebase_options.dart';
-void main() async{
+import 'package:techwiz7/screens/admin/admin_main.dart';
+import 'package:techwiz7/theme/app_theme.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -20,18 +23,19 @@ void main() async{
     url: 'https://rxuxpdeuancbjupzehse.supabase.co',
     anonKey: 'sb_publishable__QzP_6XKXzcG9Euteo4-xA_EneQZFF9',
   );
-permisions().getnotificationpermision();
+  permisions().getnotificationpermision();
   runApp(MaterialApp(
-
     debugShowCheckedModeBanner: false,
+    theme: AppTheme.lightTheme,
+    darkTheme: AppTheme.darkTheme,
     home: Splash(),
     routes: {
-      '/home':(context)=> Authguard(Home()),
-      '/chose':(context)=> chose(),
-      '/register':(context)=> Register(),
-      '/login':(context)=> Login(),
-      '/email':(context)=> emailverification(),
+      '/home': (context) => Authguard(Home()),
+      '/chose': (context) => chose(),
+      '/register': (context) => Register(),
+      '/login': (context) => Login(),
+      '/email': (context) => emailverification(),
+      '/admin': (context) => const AdminMain(),
     },
   ));
 }
-
