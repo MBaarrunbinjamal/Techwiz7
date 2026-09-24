@@ -24,11 +24,11 @@ permisions().getnotificationpermision();
   runApp(MaterialApp(
 
     debugShowCheckedModeBanner: false,
-    home: Splash(),
+    home: Spalsh(),
     routes: {
       '/home':(context)=> Authguard(Home()),
       '/chose':(context)=> chose(),
-      '/register':(context)=> Register(),
+      '/register':(context)=> RegisterScreen(),
       '/login':(context)=> Login(),
       '/email':(context)=> emailverification(),
     },
