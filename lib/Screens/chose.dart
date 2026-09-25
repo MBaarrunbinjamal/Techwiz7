@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'Login.dart';
+import 'package:techwiz7/shared/app_colors.dart';
 
 const _peachColor = Color(0xFFFFE3C4);
 const _brownColor = Color(0xFFB45309);

@@ -130,7 +130,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
       ),
       child: TextField(
         controller: searchController,
@@ -176,7 +176,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         decoration: BoxDecoration(
           color: isActive ? const Color(0xFF1B5E20) : (bgColor ?? Theme.of(context).cardColor),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isActive ? const Color(0xFF1B5E20) : Colors.grey.withOpacity(0.3)),
+          border: Border.all(color: isActive ? const Color(0xFF1B5E20) : Colors.grey.withValues(alpha: 0.3)),
         ),
         child: Text(
           label,
@@ -230,7 +230,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

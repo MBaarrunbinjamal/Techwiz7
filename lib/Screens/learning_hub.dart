@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:techwiz7/shared/penny_bottom_nav.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class LearningScreen extends StatelessWidget {
@@ -66,7 +67,7 @@ class LearningScreen extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
-                    colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+                    colors: [Colors.black.withValues(alpha: 0.8), Colors.transparent],
                   ),
                 ),
                 padding: const EdgeInsets.all(16),
@@ -308,19 +309,7 @@ class LearningScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF1B5E20),
-        unselectedItemColor: Colors.grey,
-        currentIndex: 3,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Analytics'),
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Learn'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
-        ],
-      ),
+      bottomNavigationBar: PennyBottomNav(currentIndex: 3),
     );
   }
 

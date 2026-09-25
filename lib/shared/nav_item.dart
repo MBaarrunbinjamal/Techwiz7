@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import './app_colors.dart';
+import 'package:techwiz7/shared/app_colors.dart';
 
 class NavItem extends StatelessWidget {
   final IconData icon;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:techwiz7/shared/penny_bottom_nav.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -391,19 +392,7 @@ class InsightsScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF1B5E20),
-        unselectedItemColor: Colors.grey,
-        currentIndex: 2,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Analytics'),
-          BottomNavigationBarItem(icon: Icon(Icons.school_outlined), label: 'Learn'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
-        ],
-      ),
+      bottomNavigationBar: PennyBottomNav(currentIndex: 2),
     );
   }
 
@@ -437,7 +426,7 @@ class InsightsScreen extends StatelessWidget {
               Text(title, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[700])),
               Container(
                 padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
                 child: Icon(icon, size: 14, color: color),
               )
             ],

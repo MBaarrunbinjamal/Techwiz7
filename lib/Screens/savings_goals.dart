@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import '../custom widgets/app_colors.dart';
-import '../custom widgets/goal_card.dart';
-import '../custom widgets/nav_item.dart';
-import '../custom widgets/pill_button.dart';
-import '../custom widgets/progress_bar.dart';
+import 'package:techwiz7/shared/penny_bottom_nav.dart';
+import 'package:techwiz7/shared/app_colors.dart';
+import 'package:techwiz7/shared/goal_card.dart';
+import 'package:techwiz7/shared/nav_item.dart';
+import 'package:techwiz7/shared/pill_button.dart';
+import 'package:techwiz7/shared/progress_bar.dart';
 
 class SavingsGoals extends StatefulWidget {
   const SavingsGoals({super.key});
@@ -161,7 +162,7 @@ class _SavingsGoalsState extends State<SavingsGoals> {
           ],
         ),
       ),
-      bottomNavigationBar: _bottomNav(),
+      bottomNavigationBar: PennyBottomNav(currentIndex: 0),
     );
   }
 
@@ -315,26 +316,6 @@ class _SavingsGoalsState extends State<SavingsGoals> {
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
         ),
-      ),
-    );
-  }
-
-  Widget _bottomNav() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.cardBorder)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          NavItem(icon: Icons.home_rounded, label: 'Home', active: false),
-          NavItem(icon: Icons.receipt_long_rounded, label: 'History', active: false),
-          NavItem(icon: Icons.bar_chart_rounded, label: 'Analytics', active: true),
-          NavItem(icon: Icons.school_rounded, label: 'Learn', active: false),
-          NavItem(icon: Icons.person_rounded, label: 'Profile', active: false),
-        ],
       ),
     );
   }

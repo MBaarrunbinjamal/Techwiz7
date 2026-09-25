@@ -108,7 +108,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.grey.withOpacity(0.15),
+        color: Colors.grey.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -184,7 +184,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
         decoration: BoxDecoration(
           color: isActive ? const Color(0xFF1B5E20) : (bgColor ?? Theme.of(context).cardColor),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isActive ? const Color(0xFF1B5E20) : Colors.grey.withOpacity(0.3)),
+          border: Border.all(color: isActive ? const Color(0xFF1B5E20) : Colors.grey.withValues(alpha: 0.3)),
         ),
         child: Text(
           label,
@@ -205,7 +205,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +241,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.grey.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
             child: Text(q['description'], style: const TextStyle(fontSize: 12)),
           ),
           const SizedBox(height: 12),
@@ -264,7 +264,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
               hintStyle: const TextStyle(fontSize: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                borderSide: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
               ),
             ),
           ),
@@ -301,7 +301,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
   Widget _buildMacroChip(String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: Colors.grey.withOpacity(0.15), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(16)),
       child: Text(label, style: const TextStyle(fontSize: 10)),
     );
   }
@@ -313,7 +313,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -413,7 +413,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,7 +503,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
