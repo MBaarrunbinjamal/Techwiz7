@@ -1,11 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:techwiz7/Services/FirebaseSupabaseService.dart';
+import 'package:flutter/services.dart';
 import 'package:techwiz7/shared/field_box.dart';
 import 'package:techwiz7/shared/primary_button.dart';
 import 'package:techwiz7/shared/source_chip.dart';
 import 'app_colors.dart';
-
+import 'package:techwiz7/Models/income.dart';
 class AddIncome extends StatefulWidget {
   const AddIncome({super.key});
 
@@ -14,96 +13,113 @@ class AddIncome extends StatefulWidget {
 }
 
 class _AddIncomeState extends State<AddIncome> {
-  // ── State fields ─────────────────────────────────────────
   final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _descriptController = TextEditingController();
-  DateTime date = DateTime.now();
+  final TextEditingController _descriptionController = TextEditingController();
+  final IncomeStore _store = IncomeStore.instance;
+
   String _source = 'Allowance';
-  Future<void> _addincome()async{
-    final amount = double.tryParse(_amountController.text.trim());
-    final descript = _descriptController.text.trim();
 
-    if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount')),
-      );
-      return;
-    }
-    final userid = FirebaseAuth.instance.currentUser!.uid;
-    final data = {
-      'amount': amount,
-      'descript': descript,
-      'date': date.toIso8601String(),
-      'source':  _source,
-      'userid': userid,
-    };
-try{
-  await FirebaseSupabaseService().create(tableName: 'income', data: data);
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Income added')),
-  );
-    } catch(e){
-  if (!mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Failed: $e')),
-  );
-}
-  }
-
+  static const List<_SourceOption> _sources = [
+    _SourceOption('Allowance', Icons.account_balance_wallet_outlined),
+    _SourceOption('Part-time Job', Icons.work_outline_rounded),
+    _SourceOption('Scholarship', Icons.school_outlined),
+    _SourceOption('Freelance', Icons.laptop_mac_rounded),
+    _SourceOption('Gift', Icons.card_giftcard_rounded),
+    _SourceOption('Other', Icons.more_horiz_rounded),
+  ];
 
   @override
   void dispose() {
     _amountController.dispose();
-    _descriptController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
+  // Add ---------------------------------------------------------------
 
   void _onAddIncome() {
     final amount = double.tryParse(_amountController.text.trim());
-    final descript = _descriptController.text.trim();
+    final description = _descriptionController.text.trim();
 
-    // Validation
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount')),
-      );
+      _showMessage('Enter a valid amount');
       return;
     }
 
-
-    print('Amount: $amount');
-    print('Source: $_source');
-    print('Date: $date');
-    print('descript: $descript');
-
-
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Income added')),
+    final now = DateTime.now();
+    final income = Income(
+      id: now.microsecondsSinceEpoch.toString(),
+      amount: amount,
+      source: _source,
+      date: now, // captured automatically, never picked by the student
+      description: description,
     );
 
-    Navigator.pop(context); // go back if needed
+    setState(() => _store.add(income));
+
+    _amountController.clear();
+    _descriptionController.clear();
+    FocusScope.of(context).unfocus();
+    _showMessage('Income of ${_money(amount)} added');
   }
 
-  // ── Date picker ──────────────────────────────────────────
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+  // Delete ------------------------------------------------------------
+
+  Future<void> _onDeleteIncome(Income income) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      initialDate: date,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      builder: (context) => AlertDialog(
+        title: const Text('Delete income'),
+        content: Text(
+          'Remove ${_money(income.amount)} from ${income.source}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
     );
-    if (picked != null) {
-      setState(() => date = picked);
-    }
+
+    if (confirmed != true) return;
+    setState(() => _store.delete(income.id));
+    _showMessage('Income deleted');
   }
+
+  void _showMessage(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  // Formatting --------------------------------------------------------
+
+  String _money(double value) => '\$${value.toStringAsFixed(2)}';
 
   String _formatDate(DateTime d) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun',
-      'Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
     return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
+
+  String _formatTime(DateTime d) {
+    final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final minute = d.minute.toString().padLeft(2, '0');
+    final period = d.hour < 12 ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  // Build -------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -124,96 +140,106 @@ try{
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _amountCard(),
             const SizedBox(height: 26),
-
-            // ── SOURCE ─────────────────────────────────────
-            const Text('Source',
-                style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: AppColors.textDark)),
+            _label('Source'),
             const SizedBox(height: 10),
             Wrap(
               spacing: 10,
               runSpacing: 10,
-              children: [
-                _sourceChip('Allowance', Icons.account_balance_wallet_outlined),
-                _sourceChip('Part-time Job', Icons.work_outline_rounded),
-                _sourceChip('Scholarship', Icons.school_outlined),
-                _sourceChip('Freelance', Icons.laptop_mac_rounded),
-                _sourceChip('Gift', Icons.card_giftcard_rounded),
-                _sourceChip('Other', Icons.more_horiz_rounded),
-              ],
+              children: _sources
+                  .map((option) => _sourceChip(option.label, option.icon))
+                  .toList(),
             ),
             const SizedBox(height: 24),
-
-            // ── DATE ───────────────────────────────────────
-            const Text('Date',
-                style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: AppColors.textDark)),
-            const SizedBox(height: 10),
-            GestureDetector(
-              onTap: _pickDate,
-              child: FieldBox(
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today_rounded,
-                        size: 18, color: AppColors.textMuted),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _formatDate(date),
-                        style: const TextStyle(
-                            color: AppColors.textDark, fontSize: 14),
-                      ),
-                    ),
-                    const Icon(Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.textMuted),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // ── descript ────────────────────────────────
-            const Text('descript',
-                style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: AppColors.textDark)),
+            _label('Date'),
             const SizedBox(height: 2),
-            const Text('Optional',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+            const Text(
+              'Set automatically when you save',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            _dateBox(),
+            const SizedBox(height: 24),
+            _label('Description'),
+            const SizedBox(height: 2),
+            const Text(
+              'Optional',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+            ),
             const SizedBox(height: 10),
             FieldBox(
               child: TextField(
-                controller: _descriptController,   // 👈 bound
+                controller: _descriptionController,
                 maxLines: 3,
+                textInputAction: TextInputAction.done,
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   hintText: 'Add a note about this income...',
                   hintStyle: TextStyle(
-                      color: AppColors.textMuted, fontSize: 13.5),
+                    color: AppColors.textMuted,
+                    fontSize: 13.5,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 32),
-
-            // ── SUBMIT BUTTON ──────────────────────────────
+            const SizedBox(height: 28),
             PrimaryButton(
               label: 'Add Income',
               icon: Icons.check_rounded,
-              onPressed:_addincome,
+              onPressed: _onAddIncome,
             ),
+            const SizedBox(height: 34),
+            _historyHeader(),
+            const SizedBox(height: 12),
+            _historyList(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _label(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: 15,
+        color: AppColors.textDark,
+      ),
+    );
+  }
+
+  Widget _dateBox() {
+    final now = DateTime.now();
+    return FieldBox(
+      child: Row(
+        children: [
+          const Icon(
+            Icons.calendar_today_rounded,
+            size: 18,
+            color: AppColors.textMuted,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _formatDate(now),
+              style: const TextStyle(
+                color: AppColors.textDark,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          const Icon(
+            Icons.lock_outline_rounded,
+            size: 16,
+            color: AppColors.textMuted,
+          ),
+        ],
       ),
     );
   }
@@ -243,30 +269,43 @@ try{
       ),
       child: Column(
         children: [
-          const Text('How much did you receive?',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          const Text(
+            'How much did you receive?',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+          ),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('\$',
-                  style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryDark)),
+              const Text(
+                '\$',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primaryDark,
+                ),
+              ),
               const SizedBox(width: 6),
               IntrinsicWidth(
                 child: TextField(
-                  controller: _amountController,   // 👈 bound
+                  controller: _amountController,
                   textAlign: TextAlign.center,
                   keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,2}'),
+                    ),
+                  ],
                   style: const TextStyle(
-                      fontSize: 38,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textDark),
+                    fontSize: 38,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textDark,
+                  ),
                   decoration: const InputDecoration(
-                      border: InputBorder.none, hintText: '0.00'),
+                    border: InputBorder.none,
+                    hintText: '0.00',
+                  ),
                 ),
               ),
             ],
@@ -275,4 +314,159 @@ try{
       ),
     );
   }
+
+  Widget _historyHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        _label('Your Income'),
+        Text(
+          'Total ${_money(_store.total)}',
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: AppColors.primaryDark,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _historyList() {
+    if (_store.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: const Column(
+          children: [
+            Icon(
+              Icons.receipt_long_rounded,
+              size: 30,
+              color: AppColors.textMuted,
+            ),
+            SizedBox(height: 10),
+            Text(
+              'No income recorded yet',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13.5),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: _store.all.map(_incomeTile).toList(),
+    );
+  }
+
+  Widget _incomeTile(Income income) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE9F7F0),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              _iconForSource(income.source),
+              size: 19,
+              color: AppColors.primaryDark,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  income.source,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14.5,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${_formatDate(income.date)}, ${_formatTime(income.date)}',
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+                if (income.description.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    income.description,
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '+ ${_money(income.amount)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: AppColors.primaryDark,
+                ),
+              ),
+              const SizedBox(height: 2),
+              InkWell(
+                onTap: () => _onDeleteIncome(income),
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.delete_outline_rounded,
+                    size: 19,
+                    color: Colors.redAccent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _iconForSource(String source) {
+    return _sources
+        .firstWhere(
+          (option) => option.label == source,
+      orElse: () => _sources.last,
+    )
+        .icon;
+  }
+}
+
+class _SourceOption {
+  final String label;
+  final IconData icon;
+  const _SourceOption(this.label, this.icon);
 }

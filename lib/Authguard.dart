@@ -11,7 +11,8 @@ class Authguard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    if (user == null || user.emailVerfued ]
+    ) {
       return const Login();
     }
     return child;
