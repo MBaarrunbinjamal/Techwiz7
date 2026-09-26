@@ -254,44 +254,6 @@ class _choseState extends State<chose> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),
-      child: const Row(
-        children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: _peachColor,
-            child: Icon(
-              Icons.workspace_premium_outlined,
-              size: 24,
-              color: _brownColor,
-            ),
-          ),
-          SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Earn \$10 Student Welcome Grant',
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.title,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Sign up and finish onboarding to unlock your first savings deposit.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.35,
-                    color: AppColors.body,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

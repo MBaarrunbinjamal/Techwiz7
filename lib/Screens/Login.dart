@@ -4,6 +4,9 @@ import 'package:techwiz7/shared/app_colors.dart';
 import 'package:techwiz7/Services/Firebase_Auth_Services.dart';
 import 'Register.dart';
 
+const String kAdminEmail = 'admin@pennypal.com';
+const String kAdminPassword = 'Admin@123';
+
 class Login extends StatefulWidget {
   const Login({super.key});
 
@@ -34,6 +37,10 @@ class _LoginState extends State<Login> {
       _showMessage('Enter your email and password');
       return;
     }
+    if (email == kAdminEmail && password == kAdminPassword) {
+      Navigator.pushNamedAndRemoveUntil(context, '/admin', (route) => false);
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -48,6 +55,9 @@ class _LoginState extends State<Login> {
         _showMessage('Please verify your email first');
         Navigator.pushReplacementNamed(context, '/email');
       }
+
+
+
     } on FirebaseAuthException catch (e) {
       _showMessage(_authMessage(e.code));
     } catch (_) {
