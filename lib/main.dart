@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:techwiz7/Screens/add_income.dart';
+import 'package:techwiz7/Services/income_sync_service.dart';
 
 import 'package:techwiz7/firebase_options.dart';
 import 'package:techwiz7/Authguard.dart';
@@ -38,6 +39,7 @@ void main() async {
   );
 
   permisions().getnotificationpermision();
+  IncomeSyncService().start();
   runApp(const PennyPalApp());
 }
 

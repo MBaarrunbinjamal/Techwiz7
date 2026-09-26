@@ -39,10 +39,11 @@ class AuthService {
       LastName: lastname,
       email: email,
       password: password,
-      userid: userId,
+      userId: userId,
     );
 
     await DatabaseHelper().insertUser(userData);
+
     return userCredential;
   }
 
