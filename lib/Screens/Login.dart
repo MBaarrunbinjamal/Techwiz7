@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:techwiz7/shared/app_colors.dart';
 import 'package:techwiz7/Services/Firebase_Auth_Services.dart';
@@ -49,21 +50,60 @@ class _LoginState extends State<Login> {
       final user = _auth.currentUser;
 
       if (!mounted) return;
-      if (user != null && user.emailVerified) {
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
-        _showMessage('Please verify your email first');
-        Navigator.pushReplacementNamed(context, '/email');
+
+      if (user != null) {
+        // ✅ CHECK: Deactivated user?
+        final isDeactivated = await _checkIfDeactivated(user.uid);
+
+        if (isDeactivated) {
+          await FirebaseAuth.instance.signOut();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Your email is deactivated by admin'),
+              backgroundColor: Color(0xFFC62828),
+              duration: Duration(seconds: 4),
+            ),
+          );
+          return;
+        }
+
+        // ✅ Normal flow — email verified?
+        if (user.emailVerified) {
+          Navigator.pushReplacementNamed(context, '/home');
+        } else {
+          _showMessage('Please verify your email first');
+          Navigator.pushReplacementNamed(context, '/email');
+        }
       }
-
-
-
     } on FirebaseAuthException catch (e) {
       _showMessage(_authMessage(e.code));
     } catch (_) {
       _showMessage('Something went wrong. Try again.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ✅ NEW helper — Firebase Realtime DB se deactivated check
+  Future<bool> _checkIfDeactivated(String uid) async {
+    try {
+      final snap =
+      await FirebaseDatabase.instance.ref('users/$uid').get();
+
+      if (!snap.exists || snap.value is! Map) return false;
+
+      final data = Map<String, dynamic>.from(snap.value as Map);
+      final isActive = data['isActive'];
+      final status = (data['status'] ?? '').toString().toLowerCase();
+
+      if (isActive == false) return true;
+      if (status == 'deactivated') return true;
+
+      return false;
+    } catch (_) {
+      // Agar DB error aaye to login rok mat do — safe default
+      return false;
     }
   }
 
@@ -295,13 +335,13 @@ class _LoginState extends State<Login> {
         child: _isLoading
             ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
             : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Log In', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
-                  SizedBox(width: 8),
-                  Icon(Icons.arrow_forward_rounded, size: 18),
-                ],
-              ),
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Log In', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+            SizedBox(width: 8),
+            Icon(Icons.arrow_forward_rounded, size: 18),
+          ],
+        ),
       ),
     );
   }
