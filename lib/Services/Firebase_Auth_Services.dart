@@ -12,8 +12,7 @@ class AuthService {
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // Create an account, save a profile, and send the verification email.
-  // The password is never stored. Firebase Auth keeps it hashed for us.
+
   Future<UserCredential> signUp({
     required String email,
     required String password,
@@ -25,24 +24,31 @@ class AuthService {
       password: password,
     );
 
-
     final userId = userCredential.user!.uid;
-    await FirebaseDatabase.instance.ref('users/$userId').set({
-      'FirstName': firstname,
-      'LastName': lastname,
-      'Email': email,
-      'Role': 'User',
-    });
-    await userCredential.user!.sendEmailVerification();
-    final userData = Users(
-      FirstName: firstname,
-      LastName: lastname,
-      email: email,
-      password: password,
-      userId: userId,
-    );
 
-    await DatabaseHelper().insertUser(userData);
+    try {
+      await FirebaseDatabase.instance.ref('users/$userId').set({
+        'FirstName': firstname,
+        'LastName': lastname,
+        'Email': email,
+        'Role': 'User',
+      });
+
+      await userCredential.user!.sendEmailVerification();
+
+      final userData = Users(
+        FirstName: firstname,
+        LastName: lastname,
+        email: email,
+        password: password,
+        userId: userId,
+      );
+
+      await DatabaseHelper().insertUser(userData);
+    } catch (e) {
+
+      print('Post-signup step failed: $e');
+    }
 
     return userCredential;
   }
@@ -85,6 +91,7 @@ class AuthService {
 
   Future<void> sendEmailVerification() async {
     final user = _auth.currentUser;
+
     if (user != null && !user.emailVerified) {
       await user.sendEmailVerification();
     }
