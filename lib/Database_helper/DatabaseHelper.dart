@@ -32,4 +32,17 @@ class DatabaseHelper {
     final db = await getDatabase();
     await db.insert('users', userData.toMap());
   }
+  Future<Users?> Loginuser(String Email , String Password) async {
+    final db = await getDatabase();
+    final user = await db.query(
+      'users',
+      where: 'Email = ? AND Password = ?',
+      whereArgs: [Email, Password],
+      limit: 1,
+    );
+    if(user != null && user.isNotEmpty){
+      return Users.fromMap(user.first);
+    }
+    return null;
+  }
 }

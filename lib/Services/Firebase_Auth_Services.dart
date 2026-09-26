@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
@@ -45,14 +46,32 @@ class AuthService {
     return userCredential;
   }
 
-  Future<UserCredential> signIn({
+  Future<bool> signIn({
     required String email,
     required String password,
   }) async {
-    return await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+    final connectivity = await (Connectivity().checkConnectivity());
+    final hasinternet =   connectivity.contains(ConnectivityResult.wifi) ||
+        connectivity.contains(ConnectivityResult.mobile) ||
+        connectivity.contains(ConnectivityResult.ethernet);
+    if(hasinternet){
+      try{
+        await _auth.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+        return true;
+      }on FirebaseAuthException catch(e){
+        return false;
+      }
+    }
+
+ final localuser = await DatabaseHelper().Loginuser(email, password);
+    if (localuser != null) {
+      return true;
+    }
+
+    return false;
   }
 
   Future<void> signOut() async {

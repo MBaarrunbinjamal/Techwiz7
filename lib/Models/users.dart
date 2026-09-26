@@ -22,5 +22,14 @@ class Users {
         'password': password,
         'userid'   : userid
     };}
-
+  factory Users.fromMap(Map<String, dynamic> map) {
+    return Users(
+      id: map['id'],
+      FirstName: map['FirstName'] ?? '',
+      LastName: map['LastName'] ?? '',
+      email: map['email'] ?? '',
+      password: map['password'] ?? '',
+      userid: map['userid'] ?? '',
+    );
+  }
 }
