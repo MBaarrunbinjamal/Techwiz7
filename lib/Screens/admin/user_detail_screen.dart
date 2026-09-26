@@ -23,10 +23,12 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
 
   Map<String, dynamic>? _userProfile;
   List<Map<String, dynamic>> _income = [];
+  List<Map<String, dynamic>> _expense = [];
   bool _isLoading = true;
   String? _error;
 
   double _totalIncome = 0;
+  double _totalExpense = 0;
 
   @override
   void initState() {
@@ -39,7 +41,9 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
       _isLoading = true;
       _error = null;
       _income.clear();
+      _expense.clear();
       _totalIncome = 0;
+      _totalExpense = 0;
     });
 
     try {
@@ -49,24 +53,75 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         _userProfile = Map<String, dynamic>.from(profileSnap.value as Map);
       }
 
-      // 2. Income — root pe hai, userid filter karo
+      // 2. Income — List + Map dono handle
       final incomeSnap = await _db.child('income').get();
-      if (incomeSnap.exists && incomeSnap.value is Map) {
-        final data = Map<String, dynamic>.from(incomeSnap.value as Map);
-        data.forEach((key, value) {
-          if (value is Map) {
-            final item = Map<String, dynamic>.from(value);
-            if (item['userid'] == widget.userId) {
-              item['_key'] = key;
-              _income.add(item);
-              _totalIncome += _parseAmount(item['amount']);
+      if (incomeSnap.exists && incomeSnap.value != null) {
+        final raw = incomeSnap.value;
+        if (raw is List) {
+          for (int i = 0; i < raw.length; i++) {
+            final v = raw[i];
+            if (v is Map) {
+              final item = Map<String, dynamic>.from(v);
+              if (item['userid'] == widget.userId) {
+                item['_key'] = i.toString();
+                _income.add(item);
+                _totalIncome += _parseAmount(item['amount']);
+              }
             }
           }
-        });
+        } else if (raw is Map) {
+          final data = Map<String, dynamic>.from(raw);
+          data.forEach((key, value) {
+            if (value is Map) {
+              final item = Map<String, dynamic>.from(value);
+              if (item['userid'] == widget.userId) {
+                item['_key'] = key;
+                _income.add(item);
+                _totalIncome += _parseAmount(item['amount']);
+              }
+            }
+          });
+        }
+      }
+
+      // 3. Expense — List + Map dono handle
+      final expenseSnap = await _db.child('expense').get();
+      if (expenseSnap.exists && expenseSnap.value != null) {
+        final raw = expenseSnap.value;
+        if (raw is List) {
+          for (int i = 0; i < raw.length; i++) {
+            final v = raw[i];
+            if (v is Map) {
+              final item = Map<String, dynamic>.from(v);
+              if (item['userid'] == widget.userId) {
+                item['_key'] = i.toString();
+                _expense.add(item);
+                _totalExpense += _parseAmount(item['amount']);
+              }
+            }
+          }
+        } else if (raw is Map) {
+          final data = Map<String, dynamic>.from(raw);
+          data.forEach((key, value) {
+            if (value is Map) {
+              final item = Map<String, dynamic>.from(value);
+              if (item['userid'] == widget.userId) {
+                item['_key'] = key;
+                _expense.add(item);
+                _totalExpense += _parseAmount(item['amount']);
+              }
+            }
+          });
+        }
       }
 
       // Sort by date — latest first
       _income.sort((a, b) {
+        final da = (a['date'] ?? '').toString();
+        final db = (b['date'] ?? '').toString();
+        return db.compareTo(da);
+      });
+      _expense.sort((a, b) {
         final da = (a['date'] ?? '').toString();
         final db = (b['date'] ?? '').toString();
         return db.compareTo(da);
@@ -85,6 +140,12 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     if (v == null) return 0;
     if (v is num) return v.toDouble();
     return double.tryParse(v.toString()) ?? 0;
+  }
+
+  String _formatMoney(double v) {
+    if (v >= 1000000) return 'Rs ${(v / 1000000).toStringAsFixed(2)}M';
+    if (v >= 1000) return 'Rs ${(v / 1000).toStringAsFixed(1)}K';
+    return 'Rs ${v.toStringAsFixed(0)}';
   }
 
   @override
@@ -117,9 +178,16 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
               _buildSectionHeader('Income History', _income.length),
               const SizedBox(height: 8),
               if (_income.isEmpty)
-                _buildEmpty('No income records')
+                _buildEmpty('No income records for this user')
               else
                 ..._income.map((e) => _buildIncomeTile(e)),
+              const SizedBox(height: 20),
+              _buildSectionHeader('Expense History', _expense.length),
+              const SizedBox(height: 8),
+              if (_expense.isEmpty)
+                _buildEmpty('No expense records for this user')
+              else
+                ..._expense.map((e) => _buildExpenseTile(e)),
               const SizedBox(height: 24),
             ],
           ),
@@ -137,8 +205,8 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     final isActive = p['isActive'];
     final status = (p['status'] ?? '').toString();
 
-    final bool deactivated = (isActive == false) ||
-        status.toLowerCase() == 'deactivated';
+    final bool deactivated =
+        (isActive == false) || status.toLowerCase() == 'deactivated';
 
     final initials = firstName.isNotEmpty
         ? (firstName[0] + (lastName.isNotEmpty ? lastName[0] : '')).toUpperCase()
@@ -227,6 +295,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
   }
 
   Widget _buildSummaryCard() {
+    final balance = _totalIncome - _totalExpense;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -246,12 +315,12 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Total Income',
+                    const Text('Income',
                         style: TextStyle(fontSize: 10, color: Colors.grey)),
                     const SizedBox(height: 4),
-                    Text('Rs ${_totalIncome.toStringAsFixed(0)}',
+                    Text(_formatMoney(_totalIncome),
                         style: const TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF2E7D32))),
                   ],
@@ -261,14 +330,31 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Entries',
+                    const Text('Expense',
                         style: TextStyle(fontSize: 10, color: Colors.grey)),
                     const SizedBox(height: 4),
-                    Text('${_income.length}',
+                    Text(_formatMoney(_totalExpense),
                         style: const TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1565C0))),
+                            color: Color(0xFFC62828))),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Balance',
+                        style: TextStyle(fontSize: 10, color: Colors.grey)),
+                    const SizedBox(height: 4),
+                    Text(_formatMoney(balance),
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: balance >= 0
+                                ? const Color(0xFF1565C0)
+                                : const Color(0xFFC62828))),
                   ],
                 ),
               ),
@@ -347,7 +433,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
             ),
           ),
           Text(
-            '+ Rs ${amount.toStringAsFixed(0)}',
+            '+ ${_formatMoney(amount)}',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
@@ -359,12 +445,80 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     );
   }
 
+  Widget _buildExpenseTile(Map<String, dynamic> item) {
+    final amount = _parseAmount(item['amount']);
+    // Expense me category ya source ho sakta hai
+    final category = (item['category'] ?? item['source'] ?? 'Expense').toString();
+    final desc = (item['description'] ?? item['descript'] ?? '').toString();
+    final date = (item['date'] ?? '').toString();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFEBEE),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.arrow_upward,
+              color: Color(0xFFC62828),
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(category,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold)),
+                if (desc.isNotEmpty)
+                  Text(desc,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                      const TextStyle(fontSize: 10, color: Colors.grey)),
+                if (date.isNotEmpty)
+                  Text(date.split('T').first,
+                      style:
+                      const TextStyle(fontSize: 9, color: Colors.grey)),
+              ],
+            ),
+          ),
+          Text(
+            '- ${_formatMoney(amount)}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFC62828),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmpty(String text) {
     return Container(
       padding: const EdgeInsets.all(20),
       alignment: Alignment.center,
-      child:
-      Text(text, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+      ),
+      child: Text(text,
+          style: const TextStyle(color: Colors.grey, fontSize: 12)),
     );
   }
 }
