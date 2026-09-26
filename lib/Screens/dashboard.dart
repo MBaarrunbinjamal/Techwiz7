@@ -1,4 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:techwiz7/Services/FirebaseSupabaseService.dart';
 import 'package:techwiz7/shared/penny_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
@@ -11,6 +14,92 @@ class Dashboard extends StatefulWidget {
 }
 
 class _Dashboard extends State<Dashboard> {
+  @override
+  double totalincome = 0;
+  double monthlyincome = 0;
+  String firstname = '';
+  String lastname = '';
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    getusername();
+     getIncome();
+  }
+  Future<void> getIncome() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) return;
+
+    final uid = user.uid;
+
+    final data = await FirebaseSupabaseService().read(
+      tableName: 'income',
+    );
+
+    double overall = 0;
+    double monthly = 0;
+
+    final now = DateTime.now();
+
+    if (data != null) {
+      final incomes = Map<String, dynamic>.from(data);
+
+      for (final item in incomes.values) {
+        final income = Map<String, dynamic>.from(item);
+
+        if (income['userid'].toString().trim() != uid.trim()) {
+          continue;
+        }
+
+        final amount = double.tryParse(
+          income['amount'].toString(),
+        ) ??
+            0;
+
+        overall += amount;
+
+        final date = DateTime.tryParse(
+          income['date'].toString(),
+        );
+
+        if (date != null &&
+            date.year == now.year &&
+            date.month == now.month) {
+          monthly += amount;
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      totalincome = overall;
+      monthlyincome = monthly;
+    });
+  }
+  Future<void> getusername() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) return;
+
+    final uid = user.uid;
+
+    final data = await FirebaseSupabaseService().read(
+      tableName: 'users',
+      id: uid,
+    );
+
+    if (data == null) return;
+
+    if (!mounted) return;
+
+    setState(() {
+      firstname = data['FirstName']?.toString() ?? '';
+      lastname = data['LastName']?.toString() ?? '';
+    });
+  }
+
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -96,20 +185,20 @@ class _Dashboard extends State<Dashboard> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hi, Alex 👋',
-                style: TextStyle(
+                '$firstname $lastname',
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
                   color: AppColors.ink,
                 ),
               ),
-              SizedBox(height: 4),
-              Text(
+              const SizedBox(height: 4),
+              const Text(
                 "Let's keep your budget thriving this week.",
                 style: TextStyle(fontSize: 14, color: AppColors.muted),
               ),
@@ -160,13 +249,18 @@ class _Dashboard extends State<Dashboard> {
           Row(
             children: [
               const Text(
-                'Available Balance',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+                'Total Available Income',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
               ),
               const Spacer(),
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
@@ -174,30 +268,44 @@ class _Dashboard extends State<Dashboard> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.trending_up, size: 14, color: Colors.white),
+                    Icon(
+                      Icons.trending_up,
+                      size: 14,
+                      color: Colors.white,
+                    ),
                     SizedBox(width: 4),
                     Text(
-                      '+4.2% from last week',
-                      style: TextStyle(color: Colors.white, fontSize: 11),
+                      'Income',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
           ),
+
           const SizedBox(height: 10),
-          const Text(
-            '\$1,420.50',
-            style: TextStyle(
+
+          Text(
+            '\$${totalincome.toStringAsFixed(2)}',
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 40,
               fontWeight: FontWeight.w800,
             ),
           ),
+
           const SizedBox(height: 8),
-          const Text(
-            'Primary Student Checking  •  **** 4892',
-            style: TextStyle(color: Colors.white70, fontSize: 13),
+
+          Text(
+            'This month: \$${monthlyincome.toStringAsFixed(2)}',
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+            ),
           ),
         ],
       ),
@@ -210,7 +318,8 @@ class _Dashboard extends State<Dashboard> {
         Expanded(
           child: _summaryCard(
             title: 'Total Income',
-            amount: '\$2,100.00',
+            amount: '\$${monthlyincome.toStringAsFixed(2)}',
+            totalamount: '\$${totalincome.toStringAsFixed(2)}',
             note: 'On track this mo.',
             noteColor: AppColors.green,
             icon: Icons.arrow_upward,
@@ -229,7 +338,7 @@ class _Dashboard extends State<Dashboard> {
             icon: Icons.arrow_downward,
             iconBg: AppColors.amberSoft,
             iconColor: AppColors.amber,
-            leadIcon: Icons.info_outline,
+            leadIcon: Icons.info_outline, totalamount: '',
           ),
         ),
       ],
@@ -244,7 +353,7 @@ class _Dashboard extends State<Dashboard> {
     required IconData icon,
     required Color iconBg,
     required Color iconColor,
-    required IconData leadIcon,
+    required IconData leadIcon, required String totalamount,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -304,7 +413,7 @@ class _Dashboard extends State<Dashboard> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _quickAction(Icons.add, 'Add\nIncome', AppColors.greenSoft, AppColors.green),
+          _quickAction(Icons.add, 'Add\nIncome', AppColors.greenSoft, AppColors.green,route: '/addincome'),
           _quickAction(Icons.remove, 'Add\nExpense', AppColors.amberSoft, AppColors.amber, route: '/add-expense'),
           _quickAction(Icons.pie_chart_outline, 'Budgets', const Color(0xFFEDEBFB), const Color(0xFF6D5DD3), route: '/budget'),
           _quickAction(Icons.auto_awesome, 'AI Advice', const Color(0xFFE7EBFF), const Color(0xFF3B5BFF), route: '/ai'),
