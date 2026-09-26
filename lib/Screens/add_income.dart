@@ -97,7 +97,7 @@ date: DateTime.now(),
 );
 
 try {
-await DatabaseHelper().addincome(income);
+  await DatabaseHelper().addIncomeAndSync(income);
 
 await _loadIncomes();
 
