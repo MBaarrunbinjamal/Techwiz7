@@ -77,4 +77,16 @@ class AuthService {
   Future<void> deleteAccount() async {
     await _auth.currentUser?.delete();
   }
+  Future<Map<String, dynamic>?> getUserProfile() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+
+    final snapshot =
+    await FirebaseDatabase.instance.ref('users/${user.uid}').get();
+
+    if (!snapshot.exists) return null;
+    return Map<String, dynamic>.from(snapshot.value as Map);
+  }
 }
+
+
