@@ -1,0 +1,26 @@
+class Users {
+  int? id;
+  String FirstName;
+  String LastName ;
+  String email;
+  String  password;
+  String  userid;
+    Users({
+    this.id,
+    required this.FirstName,
+    required this.LastName,
+    required this.email,
+    required this.password,
+    required this.userid
+});
+    Map<String, dynamic> toMap() {
+      return {
+        'id': id,
+        'FirstName': FirstName,
+        'LastName': LastName,
+        'email': email,
+        'password': password,
+        'userid'   : userid
+    };}
+
+}

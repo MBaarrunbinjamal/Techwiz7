@@ -1,5 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
+
+import '../Models/users.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -21,7 +24,6 @@ class AuthService {
       password: password,
     );
 
-    await userCredential.user!.sendEmailVerification();
 
     final userId = userCredential.user!.uid;
     await FirebaseDatabase.instance.ref('users/$userId').set({
@@ -30,7 +32,16 @@ class AuthService {
       'Email': email,
       'Role': 'User',
     });
+    await userCredential.user!.sendEmailVerification();
+    final userData = Users(
+      FirstName: firstname,
+      LastName: lastname,
+      email: email,
+      password: password,
+      userid: userId,
+    );
 
+    await DatabaseHelper().insertUser(userData);
     return userCredential;
   }
 
