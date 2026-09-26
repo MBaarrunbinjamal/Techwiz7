@@ -43,6 +43,7 @@ class AuthService {
     );
 
     await DatabaseHelper().insertUser(userData);
+
     return userCredential;
   }
 

@@ -4,14 +4,14 @@ class Users {
   String LastName ;
   String email;
   String  password;
-  String  userid;
+  String  userId;
     Users({
     this.id,
     required this.FirstName,
     required this.LastName,
     required this.email,
     required this.password,
-    required this.userid
+    required this.userId
 });
     Map<String, dynamic> toMap() {
       return {
@@ -20,7 +20,7 @@ class Users {
         'LastName': LastName,
         'email': email,
         'password': password,
-        'userid'   : userid
+        'userId'   : userId
     };}
   factory Users.fromMap(Map<String, dynamic> map) {
     return Users(
@@ -29,7 +29,7 @@ class Users {
       LastName: map['LastName'] ?? '',
       email: map['email'] ?? '',
       password: map['password'] ?? '',
-      userid: map['userid'] ?? '',
+      userId: map['userId'] ?? '',
     );
   }
 }
