@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:techwiz7/Models/expense.dart';
 import 'package:techwiz7/Models/income.dart';
 import 'package:techwiz7/Models/users.dart';
+import 'package:techwiz7/Models/TransactionModel.dart';
 
 class DatabaseHelper {
   static Database? database;
@@ -16,7 +17,7 @@ class DatabaseHelper {
     }
     database = await openDatabase(
       join(await getDatabasesPath(), 'Pennypal.db'),
-      version: 3,   // ✅ 2 → 3 kar do taaki onUpgrade dobara chale
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
         CREATE TABLE users(
@@ -51,14 +52,14 @@ class DatabaseHelper {
           status TEXT NOT NULL,
           date TEXT NOT NULL
         )
-      ''');   // ✅ 'expenses' (plural) — code ke saath match
+      ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        // Purani galat table(s) drop karo
+
         await db.execute('DROP TABLE IF EXISTS expense');
         await db.execute('DROP TABLE IF EXISTS expenses');
 
-        // Fresh 'expenses' table banao
+
         await db.execute('''
         CREATE TABLE expenses(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,7 +104,6 @@ class DatabaseHelper {
     return Users.fromMap(user.first);
   }
 
-  // Ab id return karta hai — sync ke liye zaroori hai
   Future<int> addincome(Income income) async {
     final db = await getDatabase();
     return await db.insert('income', income.toMap());
@@ -174,13 +174,13 @@ class DatabaseHelper {
         whereArgs: [id],
       );
     } catch (e, st) {
-      print('SYNC FAILED for id=$id: $e'); // <-- ye line add karo
+      print('SYNC FAILED for id=$id: $e');
     }
   }
 
   Future<void> addIncomeAndSync(Income income) async {
-    final id = await addincome(income); // STEP 1: local SQLite save
-    await syncIncome(id);                // STEP 2: Firebase sync try
+    final id = await addincome(income);
+    await syncIncome(id);
   }
 
   Future<void> syncPendingIncomes() async {
@@ -269,7 +269,7 @@ class DatabaseHelper {
         whereArgs: [id],
       );
     } catch (e, st) {
-      print('SYNC FAILED for id=$id: $e'); // <-- ye line add karo
+      print('SYNC FAILED for id=$id: $e');
     }
   }
 
@@ -296,5 +296,89 @@ class DatabaseHelper {
     } finally {
       _isSyncing = false;
     }
+  }
+  Future<double> getTotalIncome(String userId) async {
+    final db = await getDatabase();
+
+    final result = await db.rawQuery(
+      'SELECT SUM(amount) AS total FROM income WHERE userid = ?',
+      [userId],
+    );
+
+    final value = result.first['total'];
+    return value == null ? 0.0 : (value as num).toDouble();
+  }
+
+  Future<double> getTotalExpense(String userId) async {
+    final db = await getDatabase();
+
+    final result = await db.rawQuery(
+      'SELECT SUM(amount) AS total FROM expenses WHERE userid = ?',
+      [userId],
+    );
+
+    final value = result.first['total'];
+    return value == null ? 0.0 : (value as num).toDouble();
+  }
+
+  Future<double> getMonthlyIncome(String userId) async {
+    final db = await getDatabase();
+
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, 1);
+    final end = DateTime(now.year, now.month + 1, 1);
+
+    final result = await db.rawQuery(
+      'SELECT SUM(amount) AS total FROM income '
+          'WHERE userid = ? AND date >= ? AND date < ?',
+      [userId, start.toIso8601String(), end.toIso8601String()],
+    );
+
+    final value = result.first['total'];
+    return value == null ? 0.0 : (value as num).toDouble();
+  }
+
+  Future<List<TransactionModel>> getTransactions(String userId) async {
+    final db = await getDatabase();
+
+    final incomeRows = await db.query(
+      'income',
+      where: 'userid = ?',
+      whereArgs: [userId],
+    );
+
+    final expenseRows = await db.query(
+      'expenses',
+      where: 'userid = ?',
+      whereArgs: [userId],
+    );
+
+    final list = <TransactionModel>[];
+
+    for (final row in incomeRows) {
+      list.add(_rowToTransaction(row, 'income'));
+    }
+    for (final row in expenseRows) {
+      list.add(_rowToTransaction(row, 'expense'));
+    }
+
+    list.sort((a, b) => b.date.compareTo(a.date));
+
+    return list;
+  }
+
+
+
+  TransactionModel _rowToTransaction(Map<String, dynamic> row, String type) {
+    return TransactionModel(
+      id: row['id'] as int?,
+      userId: (row['userid'] ?? '') as String,
+      type: type,
+      amount: (row['amount'] as num).toDouble(),
+      description: (row['description'] ?? '') as String,
+      source: (row['source'] ?? '') as String,
+      status: (row['status'] ?? 'pending') as String,
+      date: DateTime.parse(row['date'] as String),
+    );
   }
 }

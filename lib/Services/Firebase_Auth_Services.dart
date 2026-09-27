@@ -1,8 +1,9 @@
+import 'package:bcrypt/bcrypt.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
-
+import 'package:techwiz7/Services/PrefsService.dart';
 import '../Models/users.dart';
 
 class AuthService {
@@ -36,17 +37,19 @@ class AuthService {
 
       await userCredential.user!.sendEmailVerification();
 
+      final salt = BCrypt.gensalt();
+      final hashedPassword = BCrypt.hashpw(password, salt);
+
       final userData = Users(
         FirstName: firstname,
         phonenumber: phone,
         email: email,
-        password: password,
+        password: hashedPassword,
         userId: userId,
       );
 
       await DatabaseHelper().insertUser(userData);
     } catch (e) {
-
       print('Post-signup step failed: $e');
     }
 
@@ -57,25 +60,51 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    final connectivity = await (Connectivity().checkConnectivity());
-    final hasinternet =   connectivity.contains(ConnectivityResult.wifi) ||
-        connectivity.contains(ConnectivityResult.mobile) ||
-        connectivity.contains(ConnectivityResult.ethernet);
-    if(hasinternet){
-      try{
-        await _auth.signInWithEmailAndPassword(
+    final connectivity = await Connectivity().checkConnectivity();
+
+    final hasInternet =
+        connectivity.contains(ConnectivityResult.wifi) ||
+            connectivity.contains(ConnectivityResult.mobile) ||
+            connectivity.contains(ConnectivityResult.ethernet);
+
+    if (hasInternet) {
+      try {
+        final cred = await _auth.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
+
+        final uid = cred.user?.uid;
+
+        if (uid != null) {
+          await PrefsService.instance.saveUserId(uid);
+        }
+
         return true;
-      }on FirebaseAuthException catch(e){
+      } on FirebaseAuthException catch (e) {
+        print('Firebase login failed: ${e.code}');
         return false;
       }
     }
 
- final localuser = await DatabaseHelper().Loginuser(email, password);
-    if (localuser != null) {
-      return true;
+    // Offline login
+    final localUser = await DatabaseHelper().Loginuser(email, password);
+
+    if (localUser != null) {
+      final storedHash = localUser.password;
+
+      final isPasswordValid = BCrypt.checkpw(
+        password,
+        storedHash,
+      );
+
+      if (isPasswordValid) {
+        await PrefsService.instance.saveUserId(
+          localUser.userId.toString(),
+        );
+
+        return true;
+      }
     }
 
     return false;
