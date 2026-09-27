@@ -400,7 +400,7 @@ class _Dashboard extends State<Dashboard> {
         children: [
           _quickAction(Icons.add, 'Add\nIncome', AppColors.greenSoft, AppColors.green,route: '/addincome'),
           _quickAction(Icons.remove, 'Add\nExpense', AppColors.amberSoft, AppColors.amber, route: '/add-expense'),
-          _quickAction(Icons.pie_chart_outline, 'Budgets', const Color(0xFFEDEBFB), const Color(0xFF6D5DD3), route: '/savings'),
+          _quickAction(Icons.pie_chart_outline, 'Budgets', const Color(0xFFEDEBFB), const Color(0xFF6D5DD3), route: '/budget'),
           _quickAction(Icons.auto_awesome, 'AI Advice', const Color(0xFFE7EBFF), const Color(0xFF3B5BFF), route: '/ai'),
         ],
       ),
