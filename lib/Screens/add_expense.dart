@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
 import 'package:techwiz7/Models/expense.dart';
+import 'package:techwiz7/Models/BudgetModel.dart';
 import 'package:techwiz7/Services/PrefsService.dart';
 import 'app_colors.dart';
 
@@ -87,25 +88,26 @@ class _AddExpense extends State<AddExpense> {
   Future<void> _deleteExpense(int id) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Expense?'),
-        content: const Text(
-          'Yeh expense permanently delete ho jayega.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red),
+      builder: (ctx) =>
+          AlertDialog(
+            title: const Text('Delete Expense?'),
+            content: const Text(
+              'Yeh expense permanently delete ho jayega.',
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
 
     if (confirm != true) return;
@@ -147,6 +149,33 @@ class _AddExpense extends State<AddExpense> {
     };
   }
 
+  // Returns an error message when this expense would push the category over
+  // its budget for the month. Returns null when it is safe to save.
+  Future<String?> _budgetBlockMessage(String userId,
+      String category,
+      double amount,
+      DateTime date,) async {
+    final month = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+    final budgets = await DatabaseHelper().getBudgets(userId, month: month);
+    final match = budgets.where((b) => b.category == category).toList();
+    if (match.isEmpty) return null; // no budget for this category, so allow it
+
+    final limit = match.first.limit;
+    final spent = await DatabaseHelper().getBudgetSpent(
+        userId, category, month);
+    final newSpent = spent + amount;
+
+    if (newSpent > limit) {
+      final canAdd = (limit - spent).clamp(0, double.infinity);
+      return 'This exceeds your $category budget.\n'
+          'Already spent \$${spent.toStringAsFixed(2)} of \$${limit
+          .toStringAsFixed(2)}.\n'
+          'You can add up to \$${canAdd.toStringAsFixed(
+          2)} in $category this month.';
+    }
+    return null;
+  }
+
   Future<void> _onSavePressed() async {
     final amount = double.tryParse(
       _amountController.text.trim(),
@@ -162,7 +191,6 @@ class _AddExpense extends State<AddExpense> {
       return;
     }
 
-    // No category is selected by default now, so make sure one is picked.
     if (_selectedCategory.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -183,6 +211,27 @@ class _AddExpense extends State<AddExpense> {
         ),
       );
 
+      return;
+    }
+
+    // Block the save when this expense would push the category over its budget.
+    final blockMsg =
+    await _budgetBlockMessage(userId, _selectedCategory, amount, _selectedDate);
+    if (blockMsg != null) {
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Budget limit reached'),
+          content: Text(blockMsg),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
       return;
     }
 
@@ -223,7 +272,6 @@ class _AddExpense extends State<AddExpense> {
       );
     }
   }
-
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -446,7 +494,8 @@ class _AddExpense extends State<AddExpense> {
   IconData _iconForCategory(String name) {
     final match = _categories.firstWhere(
           (c) => c['name'] == name,
-      orElse: () => {
+      orElse: () =>
+      {
         'name': 'Misc',
         'icon': Icons.more_horiz,
       },
@@ -714,8 +763,7 @@ class _AddExpense extends State<AddExpense> {
     return tiles;
   }
 
-  Widget _catTile(
-      IconData icon,
+  Widget _catTile(IconData icon,
       String label, {
         bool selected = false,
       }) {

@@ -6,6 +6,8 @@ class Goal {
   double saved;
   double monthly;
   DateTime targetDate;
+  String status; // 'active' or 'archived'
+  int milestone; // highest milestone reached: 0, 25, 50, 75, 100
 
   Goal({
     required this.id,
@@ -15,11 +17,14 @@ class Goal {
     required this.saved,
     required this.monthly,
     required this.targetDate,
+    this.status = 'active',
+    this.milestone = 0,
   });
 
   double get percent => target <= 0 ? 0 : (saved / target * 100).clamp(0, 100);
   double get remaining => (target - saved) < 0 ? 0 : target - saved;
   bool get isComplete => saved >= target;
+  bool get isArchived => status == 'archived';
 
   // Calendar months from now until the target date.
   int get monthsLeft {
@@ -40,6 +45,21 @@ class Goal {
     return (remaining / monthly).ceil();
   }
 
+  // FR-37 milestones.
+  // The highest milestone the current progress has passed.
+  // Used to mark milestones after a deposit and to draw the badge row.
+  int get reachedMilestone {
+    final p = percent;
+    if (p >= 100) return 100;
+    if (p >= 75) return 75;
+    if (p >= 50) return 50;
+    if (p >= 25) return 25;
+    return 0;
+  }
+
+  // True when the given milestone mark (25, 50, 75, 100) has been reached.
+  bool milestoneReached(int mark) => percent >= mark;
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -49,6 +69,8 @@ class Goal {
       'saved': saved,
       'monthly': monthly,
       'targetDate': targetDate.toIso8601String(),
+      'status': status,
+      'milestone': milestone,
     };
   }
 
@@ -61,6 +83,8 @@ class Goal {
       saved: (map['saved'] as num?)?.toDouble() ?? 0,
       monthly: (map['monthly'] as num?)?.toDouble() ?? 0,
       targetDate: DateTime.parse(map['targetDate']),
+      status: (map['status'] as String?) ?? 'active',
+      milestone: (map['milestone'] as num?)?.toInt() ?? 0,
     );
   }
 }

@@ -392,7 +392,7 @@ class InsightsScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: PennyBottomNav(currentIndex: 2),
+      bottomNavigationBar: PennyBottomNav(currentIndex: 4),
     );
   }
 

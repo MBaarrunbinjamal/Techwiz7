@@ -480,12 +480,6 @@ class _TransactionHistory extends State<TransactionHistory> {
           ),
         ),
         const Spacer(),
-        const Icon(
-          Icons.tune,
-          size: 22,
-          color: AppColors.ink,
-        ),
-        const SizedBox(width: 16),
         Stack(
           clipBehavior: Clip.none,
           children: [
