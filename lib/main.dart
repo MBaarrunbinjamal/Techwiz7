@@ -71,7 +71,7 @@ class PennyPalApp extends StatelessWidget {
         '/add-expense': (context) => AddExpense(),
         '/history': (context) => TransactionHistory(),
         '/budget': (context) => BudgetPlanner(),
-        '/reports': (context) => InsightsScreen(),
+        '/reports': (context) => AboutScreen( ),
         '/savings': (context) => SavingsGoals(),
         '/learn': (context) => LearningScreen(),
         '/ai': (context) => ChatScreen(),
