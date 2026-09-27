@@ -1,54 +1,35 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+
 import 'shared_app_bar.dart';
 
 class SupportContentScreen extends StatefulWidget {
-  final VoidCallback onOpenNotifications;
-  final VoidCallback onOpenSettings;
-
-  const SupportContentScreen({
-    Key? key,
-    required this.onOpenNotifications,
-    required this.onOpenSettings,
-  }) : super(key: key);
+  const SupportContentScreen({super.key});
 
   @override
   State<SupportContentScreen> createState() => _SupportContentScreenState();
 }
 
 class _SupportContentScreenState extends State<SupportContentScreen> {
-  final DatabaseReference _db = FirebaseDatabase.instance.ref();
+  final FirebaseDatabase _db = FirebaseDatabase.instance;
 
-  int tabIndex = 0;
-  String filter = 'All';
+  bool _isLoading = false;
+  bool _isPublishing = false;
 
-  final List<Map<String, dynamic>> queries = [
-    {
-      'name': 'Sarah Jenkins',
-      'id': '#1043',
-      'time': '25m ago',
-      'status': 'In Review',
-      'urgent': true,
-      'title': 'Receipt scanner failed to recognize dining hall invoice',
-      'description':
-      '"The camera scanned the receipt but the total showed \$0.00 instead of \$14.50..."',
-      'detailed': true,
-    },
-    {
-      'name': 'Liam Wong',
-      'id': '#1041',
-      'time': '1h ago',
-      'status': 'Pending Response',
-      'urgent': false,
-      'title': 'How to change currency from USD to EUR?',
-      'description': '',
-      'detailed': false,
-    },
-  ];
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descriptionController =
+  TextEditingController();
+  final TextEditingController _coverImageController =
+  TextEditingController();
+  final TextEditingController _tagController = TextEditingController();
+  final TextEditingController _readTimeController = TextEditingController();
+  final TextEditingController _contentController = TextEditingController();
 
   List<Map<String, dynamic>> _modules = [];
-  bool _isLoadingModules = true;
 
   @override
   void initState() {
@@ -56,58 +37,147 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
     _loadModules();
   }
 
-  Future<void> _loadModules() async {
-    setState(() => _isLoadingModules = true);
-    try {
-      final snap = await _db.child('learning').get();
-      final List<Map<String, dynamic>> loaded = [];
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _coverImageController.dispose();
+    _tagController.dispose();
+    _readTimeController.dispose();
+    _contentController.dispose();
+    super.dispose();
+  }
 
-      if (snap.exists && snap.value != null) {
-        final raw = snap.value;
-        if (raw is Map) {
-          final data = Map<String, dynamic>.from(raw);
-          data.forEach((key, value) {
-            if (value is Map) {
-              final item = Map<String, dynamic>.from(value);
-              item['_key'] = key;
-              loaded.add(item);
-            }
-          });
-        } else if (raw is List) {
-          for (int i = 0; i < raw.length; i++) {
-            final v = raw[i];
-            if (v is Map) {
-              final item = Map<String, dynamic>.from(v);
-              item['_key'] = i.toString();
-              loaded.add(item);
-            }
+  Future<void> _loadModules() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      final snapshot = await _db.child('learning').get();
+
+      final List<Map<String, dynamic>> loadedModules = [];
+
+      if (snapshot.exists && snapshot.value is Map) {
+        final data = Map<dynamic, dynamic>.from(snapshot.value as Map);
+
+        data.forEach((key, value) {
+          if (value is Map) {
+            final module = Map<String, dynamic>.from(value);
+
+            module['id'] = key.toString();
+
+            loadedModules.add(module);
           }
-        }
+        });
       }
 
-      loaded.sort((a, b) {
-        final ta = (a['publishedAt'] ?? 0) as num;
-        final tb = (b['publishedAt'] ?? 0) as num;
-        return tb.toInt().compareTo(ta.toInt());
+      loadedModules.sort((a, b) {
+        final aTime = int.tryParse(
+          a['publishedAt']?.toString() ?? '0',
+        ) ??
+            0;
+
+        final bTime = int.tryParse(
+          b['publishedAt']?.toString() ?? '0',
+        ) ??
+            0;
+
+        return bTime.compareTo(aTime);
       });
 
-      setState(() {
-        _modules = loaded;
-        _isLoadingModules = false;
-      });
+      if (mounted) {
+        setState(() {
+          _modules = loadedModules;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoadingModules = false);
+      debugPrint('Load modules failed: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load content: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  List<Map<String, dynamic>> get filteredQueries {
-    if (filter == 'Urgent')
-      return queries.where((q) => q['urgent'] == true).toList();
-    if (filter == 'General')
-      return queries.where((q) => q['urgent'] == false).toList();
-    if (filter == 'Resolved')
-      return queries.where((q) => q['status'] == 'Resolved').toList();
-    return queries;
+  Future<String?> _getFcmToken(String uid) async {
+    try {
+      final userSnap = await _db.child('users/$uid/fcmToken').get();
+
+      if (!userSnap.exists) {
+        debugPrint('No FCM token found for $uid');
+        return null;
+      }
+
+      final value = userSnap.value;
+
+      if (value == null) {
+        debugPrint('FCM token is null for $uid');
+        return null;
+      }
+
+      final token = value.toString().trim();
+
+      if (token.isEmpty) {
+        debugPrint('FCM token is empty for $uid');
+        return null;
+      }
+
+      return token;
+    } catch (e) {
+      debugPrint('Failed to get FCM token for $uid: $e');
+      return null;
+    }
+  }
+
+  Future<void> _sendPushNotification({
+    required String uid,
+    required String title,
+    required String body,
+  }) async {
+    try {
+      final token = await _getFcmToken(uid);
+
+      if (token == null || token.isEmpty) {
+        debugPrint(
+          'Push skipped for $uid because no FCM token exists',
+        );
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse(
+          'https://notificationnode.vercel.app/send-notification',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'token': token,
+          'title': title,
+          'body': body,
+        }),
+      );
+
+      debugPrint(
+        'FCM response for $uid: '
+            '${response.statusCode} ${response.body}',
+      );
+    } catch (e) {
+      debugPrint(
+        'FCM notification failed for $uid: $e',
+      );
+    }
   }
 
   Future<void> _publishContent({
@@ -118,11 +188,21 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
     required String readTime,
     required String content,
   }) async {
+    if (_isPublishing) {
+      return;
+    }
+
     try {
+      setState(() {
+        _isPublishing = true;
+      });
+
       final now = DateTime.now().millisecondsSinceEpoch;
+
       final user = FirebaseAuth.instance.currentUser;
 
       final ref = _db.child('learning').push();
+
       await ref.set({
         'title': title,
         'description': description,
@@ -137,654 +217,414 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
 
       final postId = ref.key;
 
+      if (postId == null) {
+        throw Exception('Could not create learning content ID');
+      }
+
       final usersSnap = await _db.child('users').get();
+
       if (usersSnap.exists && usersSnap.value is Map) {
-        final users = Map<String, dynamic>.from(usersSnap.value as Map);
+        final users = Map<dynamic, dynamic>.from(
+          usersSnap.value as Map,
+        );
+
         final updates = <String, dynamic>{};
 
-        users.forEach((uid, _) {
-          final notifRef = _db.child('notifications/$uid').push();
-          updates['notifications/$uid/${notifRef.key}'] = {
+        for (final entry in users.entries) {
+          final uid = entry.key.toString();
+
+          final userData = entry.value is Map
+              ? Map<dynamic, dynamic>.from(entry.value as Map)
+              : <dynamic, dynamic>{};
+
+          /*
+           * Admin account does not need a notification token.
+           * If an admin record exists inside users, skip it.
+           */
+          final role =
+              userData['Role']?.toString().toLowerCase().trim() ?? '';
+
+          if (role == 'admin') {
+            continue;
+          }
+
+          final notificationKey = _db
+              .child('notifications')
+              .child(uid)
+              .push()
+              .key;
+
+          if (notificationKey == null) {
+            continue;
+          }
+
+          updates[
+          'notifications/$uid/$notificationKey'] = {
             'title': 'New Learning Content',
-            'body': 'Admin uploaded: "$title"',
+            'body': 'Admin has published a new learning content',
             'type': 'learning',
-            'refId': postId ?? '',
+            'refId': postId,
             'createdAt': now,
             'isRead': false,
             'isPinned': false,
           };
-        });
+        }
 
         if (updates.isNotEmpty) {
           await _db.update(updates);
+        }
+
+        /*
+         * Send system push notification to every user
+         * who has an FCM token stored in:
+         *
+         * users/{uid}/fcmToken
+         */
+        for (final entry in users.entries) {
+          final uid = entry.key.toString();
+
+          final userData = entry.value is Map
+              ? Map<dynamic, dynamic>.from(entry.value as Map)
+              : <dynamic, dynamic>{};
+
+          final role =
+              userData['Role']?.toString().toLowerCase().trim() ?? '';
+
+          if (role == 'admin') {
+            continue;
+          }
+
+          await _sendPushNotification(
+            uid: uid,
+            title: 'New Learning Content',
+            body: 'Admin has published a new learning content',
+          );
         }
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Content published & notifications sent'),
+            content: Text(
+              'Content published & notifications sent',
+            ),
             backgroundColor: Color(0xFF2E7D32),
           ),
         );
       }
-      _loadModules();
+
+      _clearFields();
+
+      await _loadModules();
     } catch (e) {
+      debugPrint('Publish content failed: $e');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e')),
+          SnackBar(
+            content: Text('Failed: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
-    }
-  }
-
-  Future<void> _deleteContent(String key) async {
-    try {
-      await _db.child('learning/$key').remove();
+    } finally {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Deleted')));
-      }
-      _loadModules();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+        setState(() {
+          _isPublishing = false;
+        });
       }
     }
   }
 
-  Future<void> _toggleModuleActive(String key, bool current) async {
-    try {
-      await _db.child('learning/$key').update({'isActive': !current});
-      _loadModules();
-    } catch (_) {}
+  void _clearFields() {
+    _titleController.clear();
+    _descriptionController.clear();
+    _coverImageController.clear();
+    _tagController.clear();
+    _readTimeController.clear();
+    _contentController.clear();
   }
 
-  void _showAddContentDialog() {
-    final titleCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    final imgCtrl = TextEditingController();
-    final tagCtrl = TextEditingController(text: 'Beginner');
-    final readCtrl = TextEditingController(text: '4 min read');
-    final contentCtrl = TextEditingController();
+  Future<void> _showPublishDialog() async {
+    _clearFields();
 
-    showDialog(
+    await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Publish New Content'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleCtrl,
-                decoration: const InputDecoration(labelText: 'Title'),
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Publish Learning Content'),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildDialogField(
+                    controller: _titleController,
+                    label: 'Title',
+                    hint: 'Enter learning content title',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildDialogField(
+                    controller: _descriptionController,
+                    label: 'Description',
+                    hint: 'Enter short description',
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildDialogField(
+                    controller: _coverImageController,
+                    label: 'Cover Image URL',
+                    hint: 'https://...',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildDialogField(
+                    controller: _tagController,
+                    label: 'Tag',
+                    hint: 'AI / Finance / Learning',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildDialogField(
+                    controller: _readTimeController,
+                    label: 'Read Time',
+                    hint: '5 min read',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildDialogField(
+                    controller: _contentController,
+                    label: 'Content',
+                    hint: 'Write your learning content...',
+                    maxLines: 8,
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: descCtrl,
-                maxLines: 2,
-                decoration:
-                const InputDecoration(labelText: 'Short Description'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: imgCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Cover Image URL',
-                    hintText: 'https://images.unsplash.com/...'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: tagCtrl,
-                decoration:
-                const InputDecoration(labelText: 'Tag (Beginner, Saving)'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: readCtrl,
-                decoration: const InputDecoration(labelText: 'Read Time'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: contentCtrl,
-                maxLines: 4,
-                decoration: const InputDecoration(labelText: 'Full Content'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
             ),
-            onPressed: () async {
-              if (titleCtrl.text.trim().isEmpty) return;
-              Navigator.pop(ctx);
-              await _publishContent(
-                title: titleCtrl.text.trim(),
-                description: descCtrl.text.trim(),
-                coverImage: imgCtrl.text.trim(),
-                tag: tagCtrl.text.trim(),
-                readTime: readCtrl.text.trim(),
-                content: contentCtrl.text.trim(),
-              );
-            },
-            child: const Text('Publish'),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: _isPublishing
+                  ? null
+                  : () {
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: _isPublishing
+                  ? null
+                  : () async {
+                final title = _titleController.text.trim();
+                final description =
+                _descriptionController.text.trim();
+                final coverImage =
+                _coverImageController.text.trim();
+                final tag = _tagController.text.trim();
+                final readTime =
+                _readTimeController.text.trim();
+                final content =
+                _contentController.text.trim();
+
+                if (title.isEmpty ||
+                    description.isEmpty ||
+                    content.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Title, description and content are required',
+                      ),
+                    ),
+                  );
+
+                  return;
+                }
+
+                Navigator.pop(context);
+
+                await _publishContent(
+                  title: title,
+                  description: description,
+                  coverImage: coverImage,
+                  tag: tag,
+                  readTime: readTime,
+                  content: content,
+                );
+              },
+              child: _isPublishing
+                  ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                ),
+              )
+                  : const Text('Publish'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDialogField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        border: const OutlineInputBorder(),
       ),
     );
+  }
+
+  String _formatDate(dynamic timestamp) {
+    try {
+      final value = int.tryParse(
+        timestamp?.toString() ?? '',
+      );
+
+      if (value == null || value == 0) {
+        return '';
+      }
+
+      final date = DateTime.fromMillisecondsSinceEpoch(value);
+
+      return '${date.day.toString().padLeft(2, '0')}/'
+          '${date.month.toString().padLeft(2, '0')}/'
+          '${date.year}';
+    } catch (_) {
+      return '';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: SharedAppBar(
-        title: 'Support & Content',
-        subtitle: 'Manage student requests & modules',
-        showProfileIcon: true,
-        onOpenNotifications: widget.onOpenNotifications,
-        onOpenSettings: widget.onOpenSettings,
+      appBar: const SharedAppBar(
+        title: 'Learning Content',
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildToggleTabs(),
-            const SizedBox(height: 16),
-            if (tabIndex == 0) ...[
-              _buildFilterRow(),
-              const SizedBox(height: 16),
-              ...filteredQueries.map((q) => q['detailed'] == true
-                  ? _buildSupportTicketCard(q)
-                  : _buildSimpleTicketCard(q)),
-            ] else ...[
-              _buildFinancialModules(),
-            ],
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildToggleTabs() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.grey.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-              child: _buildTabButton('Support Queries', 0,
-                  Icons.support_agent, '${queries.length}')),
-          Expanded(
-              child: _buildTabButton('Learning Content', 1,
-                  Icons.menu_book, '${_modules.length}')),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabButton(
-      String label, int index, IconData icon, String count) {
-    final isActive = tabIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => tabIndex = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: isActive ? Theme.of(context).cardColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon,
-                size: 16,
-                color: isActive
-                    ? Theme.of(context).textTheme.bodyLarge?.color
-                    : Colors.grey),
-            const SizedBox(width: 8),
-            Flexible(
+      body: _isLoading
+          ? const Center(
+        child: CircularProgressIndicator(),
+      )
+          : RefreshIndicator(
+        onRefresh: _loadModules,
+        child: _modules.isEmpty
+            ? ListView(
+          children: const [
+            SizedBox(height: 180),
+            Center(
               child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight:
-                    isActive ? FontWeight.bold : FontWeight.normal,
-                    color: isActive
-                        ? Theme.of(context).textTheme.bodyLarge?.color
-                        : Colors.grey),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(count,
-                style: const TextStyle(fontSize: 10, color: Colors.grey)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterRow() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          _buildFilterChip('All', 'All', true),
-          const SizedBox(width: 8),
-          _buildFilterChip('Urgent', 'Urgent', false,
-              const Color(0xFFFFEBEE), const Color(0xFFC62828)),
-          const SizedBox(width: 8),
-          _buildFilterChip('General', 'General', false),
-          const SizedBox(width: 8),
-          _buildFilterChip('Resolved', 'Resolved', false),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, String value, bool isFirst,
-      [Color? bgColor, Color? textColor]) {
-    final isActive = filter == value;
-    return GestureDetector(
-      onTap: () => setState(() => filter = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive
-              ? const Color(0xFF1B5E20)
-              : (bgColor ?? Theme.of(context).cardColor),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: isActive
-                  ? const Color(0xFF1B5E20)
-                  : Colors.grey.withValues(alpha: 0.3)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: isActive
-                ? Colors.white
-                : (textColor ??
-                Theme.of(context).textTheme.bodyLarge?.color),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSupportTicketCard(Map<String, dynamic> q) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: const Color(0xFFFFF3E0),
-                child: Text(q['name'][0],
-                    style: const TextStyle(
-                        color: Color(0xFFEF6C00),
-                        fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(q['name'],
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.bold)),
-                    Text(q['id'],
-                        style: const TextStyle(
-                            fontSize: 10, color: Colors.grey)),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
-                    borderRadius: BorderRadius.circular(8)),
-                child: Text(q['status'],
-                    style: const TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFFEF6C00),
-                        fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(width: 8),
-              Text(q['time'],
-                  style:
-                  const TextStyle(fontSize: 10, color: Colors.grey)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(q['title'],
-              style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.bold)),
-          if ((q['description'] ?? '').toString().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Text(q['description'],
-                  style: const TextStyle(fontSize: 12)),
-            ),
-          ],
-          const SizedBox(height: 12),
-          TextField(
-            maxLines: 3,
-            decoration: InputDecoration(
-              hintText: 'Type admin reply to student...',
-              hintStyle: const TextStyle(fontSize: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide:
-                BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              OutlinedButton(
-                onPressed: () {},
-                style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8))),
-                child:
-                const Text('Reassign', style: TextStyle(fontSize: 12)),
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Response sent & ticket resolved')),
-                  );
-                },
-                icon: const Icon(Icons.send, size: 14),
-                label: const Text('Send & Resolve',
-                    style: TextStyle(fontSize: 12)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSimpleTicketCard(Map<String, dynamic> q) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: const Color(0xFFE3F2FD),
-            child: Text(q['name'][0],
-                style: const TextStyle(
-                    color: Color(0xFF1565C0), fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                        child: Text(q['name'],
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold))),
-                    const SizedBox(width: 8),
-                    Text(q['id'],
-                        style: const TextStyle(
-                            fontSize: 10, color: Colors.grey)),
-                  ],
-                ),
-                Text(q['title'],
-                    style: const TextStyle(fontSize: 12),
-                    overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(8)),
-            child: Text(q['status'],
-                style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFFEF6C00),
-                    fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFinancialModules() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Financial Literacy Modules',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
-                  Text('Published content from Firebase',
-                      style: TextStyle(fontSize: 10, color: Colors.grey)),
-                ],
-              ),
-            ),
-            ElevatedButton.icon(
-              onPressed: _showAddContentDialog,
-              icon: const Icon(Icons.add, size: 14),
-              label: const Text('Add New',
-                  style: TextStyle(fontSize: 10)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                'No learning content found',
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 12),
-        if (_isLoadingModules)
-          const Center(
+        )
+            : ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: _modules.length,
+          itemBuilder: (context, index) {
+            final module = _modules[index];
+
+            final title =
+                module['title']?.toString() ?? '';
+
+            final description =
+                module['description']?.toString() ?? '';
+
+            final tag =
+                module['tag']?.toString() ?? '';
+
+            final readTime =
+                module['readTime']?.toString() ?? '';
+
+            final coverImage =
+                module['coverImage']?.toString() ?? '';
+
+            final date =
+            _formatDate(module['publishedAt']);
+
+            return Card(
+              margin: const EdgeInsets.only(
+                bottom: 14,
+              ),
               child: Padding(
-                padding: EdgeInsets.all(20),
-                child: CircularProgressIndicator(),
-              ))
-        else if (_modules.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(30),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border:
-              Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-            ),
-            child: Column(
-              children: const [
-                Icon(Icons.menu_book, size: 48, color: Colors.grey),
-                SizedBox(height: 12),
-                Text('No content yet',
-                    style: TextStyle(fontSize: 14, color: Colors.grey)),
-                SizedBox(height: 4),
-                Text('Tap "Add New" to publish',
-                    style: TextStyle(fontSize: 11, color: Colors.grey)),
-              ],
-            ),
-          )
-        else
-          ..._modules.map((m) => _buildModuleCard(m)),
-      ],
-    );
-  }
-
-  Widget _buildModuleCard(Map<String, dynamic> m) {
-    final title = (m['title'] ?? 'Untitled').toString();
-    final desc = (m['description'] ?? '').toString();
-    final tag = (m['tag'] ?? 'General').toString();
-    final readTime = (m['readTime'] ?? '3 min read').toString();
-    final isActive = m['isActive'] != false;
-    final publishedAt = m['publishedAt'] ?? 0;
-    final key = m['_key'] ?? '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('$tag • $readTime',
-                  style: const TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold)),
-              Switch(
-                value: isActive,
-                onChanged: (_) => _toggleModuleActive(key, isActive),
-                activeColor: const Color(0xFF2E7D32),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.bold)),
-          if (desc.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(desc,
-                style:
-                const TextStyle(fontSize: 12, color: Colors.grey),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis),
-          ],
-          const SizedBox(height: 8),
-          Text('Published: ${_formatDate(publishedAt)}',
-              style: const TextStyle(fontSize: 10, color: Colors.grey)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Duplicated (demo)')),
-                  );
-                },
-                child: Row(
-                  children: const [
-                    Icon(Icons.copy, size: 14, color: Colors.grey),
-                    SizedBox(width: 4),
-                    Text('Duplicate',
-                        style:
-                        TextStyle(fontSize: 10, color: Colors.grey)),
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
+                  children: [
+                    if (coverImage.isNotEmpty)
+                      ClipRRect(
+                        borderRadius:
+                        BorderRadius.circular(12),
+                        child: Image.network(
+                          coverImage,
+                          width: double.infinity,
+                          height: 180,
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (
+                              context,
+                              error,
+                              stackTrace,
+                              ) {
+                            return Container(
+                              width: double.infinity,
+                              height: 180,
+                              alignment: Alignment.center,
+                              color: Colors.grey.shade200,
+                              child: const Icon(
+                                Icons.image_not_supported,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(description),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        if (tag.isNotEmpty)
+                          Chip(
+                            label: Text(tag),
+                          ),
+                        if (readTime.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Text(readTime),
+                        ],
+                        const Spacer(),
+                        if (date.isNotEmpty)
+                          Text(date),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
-              GestureDetector(
-                onTap: () => _deleteContent(key),
-                child: Row(
-                  children: const [
-                    Icon(Icons.delete,
-                        size: 14, color: Color(0xFFC62828)),
-                    SizedBox(width: 4),
-                    Text('Delete',
-                        style: TextStyle(
-                            fontSize: 10, color: Color(0xFFC62828))),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              OutlinedButton(
-                onPressed: () {},
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 4),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                child:
-                const Text('Edit', style: TextStyle(fontSize: 10)),
-              ),
-            ],
-          ),
-        ],
+            );
+          },
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isPublishing ? null : _showPublishDialog,
+        icon: const Icon(Icons.add),
+        label: const Text('Publish Content'),
       ),
     );
-  }
-
-  String _formatDate(dynamic ts) {
-    if (ts == null) return 'Unknown';
-    try {
-      final dt =
-      DateTime.fromMillisecondsSinceEpoch((ts as num).toInt());
-      return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
-    } catch (_) {
-      return 'Unknown';
-    }
   }
 }

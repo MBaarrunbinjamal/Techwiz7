@@ -2,28 +2,49 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:techwiz7/Services/PrefsService.dart';
 import 'package:techwiz7/shared/penny_bottom_nav.dart';
 import 'app_colors.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
+
   @override
-  State<NotificationsScreen> createState() => _NotificationsScreenState();
+  State<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen>
     with WidgetsBindingObserver {
-  final DatabaseReference _db = FirebaseDatabase.instance.ref();
+  final DatabaseReference _db =
+  FirebaseDatabase.instance.ref();
+
+  final FirebaseMessaging _messaging =
+      FirebaseMessaging.instance;
+
   List<Map<String, dynamic>> _notifications = [];
+
   bool _isLoading = true;
-  int _lastCount = 0;
   bool _soundInitialized = false;
+
+  int _lastCount = 0;
 
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addObserver(this);
+
+    _initializeNotifications();
+  }
+
+  Future<void> _initializeNotifications() async {
+    await _loadAndSaveFcmToken();
+
     _listenNotifications();
+
+    _listenForTokenRefresh();
   }
 
   @override
@@ -33,205 +54,528 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // App wapas foreground me aaye to sound check
+  void didChangeAppLifecycleState(
+      AppLifecycleState state,
+      ) {
     if (state == AppLifecycleState.resumed) {
-      // Fire listener phir se check karega
+      _loadAndSaveFcmToken();
+    }
+  }
+
+  Future<void> _loadAndSaveFcmToken() async {
+    try {
+      final uid =
+          FirebaseAuth.instance.currentUser?.uid;
+
+      if (uid == null) {
+        return;
+      }
+
+      final token = await _messaging.getToken();
+
+      if (token != null && token.isNotEmpty) {
+        await PrefsService.instance.saveToken(token);
+
+        debugPrint(
+          'FCM token saved: $token',
+        );
+      }
+    } catch (e) {
+      debugPrint(
+        'FCM token error: $e',
+      );
+    }
+  }
+
+  void _listenForTokenRefresh() {
+    _messaging.onTokenRefresh.listen(
+          (newToken) async {
+        try {
+          await PrefsService.instance.saveToken(
+            newToken,
+          );
+
+          debugPrint(
+            'FCM token refreshed and saved',
+          );
+        } catch (e) {
+          debugPrint(
+            'FCM token refresh save error: $e',
+          );
+        }
+      },
+    );
+  }
+
+  Future<String?> _getSavedFcmToken() async {
+    try {
+      final token =
+      await PrefsService.instance.getToken();
+
+      debugPrint(
+        'Saved FCM Token: $token',
+      );
+
+      return token;
+    } catch (e) {
+      debugPrint(
+        'Could not get saved FCM token: $e',
+      );
+
+      return null;
     }
   }
 
   void _listenNotifications() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid =
+        FirebaseAuth.instance.currentUser?.uid;
+
     if (uid == null) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+
       return;
     }
 
-    _db.child('notifications/$uid').onValue.listen((event) {
-      final snap = event.snapshot;
-      final List<Map<String, dynamic>> loaded = [];
+    _db
+        .child('notifications')
+        .child(uid)
+        .onValue
+        .listen(
+          (event) {
+        final snap = event.snapshot;
 
-      if (snap.exists && snap.value != null) {
-        final raw = snap.value;
-        if (raw is Map) {
-          final data = Map<String, dynamic>.from(raw);
-          data.forEach((key, value) {
-            if (value is Map) {
-              final item = Map<String, dynamic>.from(value);
-              item['_key'] = key;
-              loaded.add(item);
-            }
-          });
-        } else if (raw is List) {
-          for (int i = 0; i < raw.length; i++) {
-            final v = raw[i];
-            if (v is Map) {
-              final item = Map<String, dynamic>.from(v);
-              item['_key'] = i.toString();
-              loaded.add(item);
+        final List<Map<String, dynamic>> loaded =
+        [];
+
+        if (snap.exists && snap.value != null) {
+          final raw = snap.value;
+
+          if (raw is Map) {
+            raw.forEach(
+                  (key, value) {
+                if (value is Map) {
+                  final item =
+                  Map<String, dynamic>.from(
+                    value,
+                  );
+
+                  item['_key'] =
+                      key.toString();
+
+                  loaded.add(item);
+                }
+              },
+            );
+          } else if (raw is List) {
+            for (
+            int i = 0;
+            i < raw.length;
+            i++
+            ) {
+              final value = raw[i];
+
+              if (value is Map) {
+                final item =
+                Map<String, dynamic>.from(
+                  value,
+                );
+
+                item['_key'] =
+                    i.toString();
+
+                loaded.add(item);
+              }
             }
           }
         }
-      }
 
-      loaded.sort((a, b) {
-        final pa = a['isPinned'] == true ? 1 : 0;
-        final pb = b['isPinned'] == true ? 1 : 0;
-        if (pa != pb) return pb.compareTo(pa);
-        final ta = (a['createdAt'] ?? 0) as num;
-        final tb = (b['createdAt'] ?? 0) as num;
-        return tb.toInt().compareTo(ta.toInt());
-      });
+        loaded.sort(
+              (a, b) {
+            final pa =
+            a['isPinned'] == true
+                ? 1
+                : 0;
 
-      // ✅ Naya notification aaya → sound bajao
-      // First load pe sound nahi bajana
-      if (_soundInitialized && loaded.length > _lastCount) {
-        _playNotificationSound();
-      }
-      _soundInitialized = true;
-      _lastCount = loaded.length;
+            final pb =
+            b['isPinned'] == true
+                ? 1
+                : 0;
 
-      if (!mounted) return;
-      setState(() {
-        _notifications = loaded;
-        _isLoading = false;
-      });
-    });
+            if (pa != pb) {
+              return pb.compareTo(pa);
+            }
+
+            final ta =
+            _getTimestamp(
+              a['createdAt'],
+            );
+
+            final tb =
+            _getTimestamp(
+              b['createdAt'],
+            );
+
+            return tb.compareTo(ta);
+          },
+        );
+
+        if (_soundInitialized &&
+            loaded.length > _lastCount) {
+          _playNotificationSound();
+        }
+
+        _soundInitialized = true;
+        _lastCount = loaded.length;
+
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _notifications = loaded;
+          _isLoading = false;
+        });
+      },
+      onError: (error) {
+        debugPrint(
+          'Notification listener error: $error',
+        );
+
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _isLoading = false;
+        });
+      },
+    );
   }
 
-  // ✅ System sound — "tu tu tu tu tu" wala effect
+  int _getTimestamp(dynamic value) {
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return 0;
+  }
+
   void _playNotificationSound() {
-    // Multiple beeps = notification jaisa sound
-    Future.delayed(Duration.zero, () {
-      SystemSound.play(SystemSoundType.alert);
-      HapticFeedback.heavyImpact();
-    });
-    Future.delayed(const Duration(milliseconds: 150), () {
-      SystemSound.play(SystemSoundType.alert);
-    });
-    Future.delayed(const Duration(milliseconds: 300), () {
-      SystemSound.play(SystemSoundType.alert);
-    });
+    Future.delayed(
+      Duration.zero,
+          () {
+        SystemSound.play(
+          SystemSoundType.alert,
+        );
+
+        HapticFeedback.heavyImpact();
+      },
+    );
+
+    Future.delayed(
+      const Duration(
+        milliseconds: 150,
+      ),
+          () {
+        SystemSound.play(
+          SystemSoundType.alert,
+        );
+      },
+    );
+
+    Future.delayed(
+      const Duration(
+        milliseconds: 300,
+      ),
+          () {
+        SystemSound.play(
+          SystemSoundType.alert,
+        );
+      },
+    );
   }
 
-  Future<void> _markAsRead(String key) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    await _db.child('notifications/$uid/$key').update({'isRead': true});
+  Future<void> _markAsRead(
+      String key,
+      ) async {
+    final uid =
+        FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null || key.isEmpty) {
+      return;
+    }
+
+    try {
+      await _db
+          .child('notifications')
+          .child(uid)
+          .child(key)
+          .update({
+        'isRead': true,
+      });
+    } catch (e) {
+      debugPrint(
+        'Mark notification read error: $e',
+      );
+    }
   }
 
-  Future<void> _togglePin(String key, bool current) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    await _db
-        .child('notifications/$uid/$key')
-        .update({'isPinned': !current});
+  Future<void> _togglePin(
+      String key,
+      bool current,
+      ) async {
+    final uid =
+        FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null || key.isEmpty) {
+      return;
+    }
+
+    try {
+      await _db
+          .child('notifications')
+          .child(uid)
+          .child(key)
+          .update({
+        'isPinned': !current,
+      });
+    } catch (e) {
+      debugPrint(
+        'Toggle pin error: $e',
+      );
+    }
   }
 
   Future<void> _clearAll() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear all notifications?'),
-        content: const Text('This cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Clear')),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await _db.child('notifications/$uid').remove();
+    final uid =
+        FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null) {
+      return;
     }
+
+    final confirmed =
+    await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text(
+            'Clear all notifications?',
+          ),
+          content: const Text(
+            'This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  ctx,
+                  false,
+                );
+              },
+              child: const Text(
+                'Cancel',
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  ctx,
+                  true,
+                );
+              },
+              child: const Text(
+                'Clear',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await _db
+          .child('notifications')
+          .child(uid)
+          .remove();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to clear notifications: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _refreshNotifications() async {
+    await _loadAndSaveFcmToken();
+
+    final token =
+    await _getSavedFcmToken();
+
+    debugPrint(
+      'Current saved FCM token: $token',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor:
+      AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor:
+        AppColors.background,
         elevation: 0,
         leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.ink),
-            onPressed: () => Navigator.pop(context)),
+          icon: const Icon(
+            Icons.arrow_back,
+            color: AppColors.ink,
+          ),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
         title: const Text(
           'Notifications',
           style: TextStyle(
-              color: AppColors.greenDark,
-              fontWeight: FontWeight.w800,
-              fontSize: 20),
+            color: AppColors.greenDark,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: _clearAll,
-            child: const Text('Clear all',
-                style: TextStyle(
-                    color: AppColors.green, fontWeight: FontWeight.w700)),
+            child: const Text(
+              'Clear all',
+              style: TextStyle(
+                color: AppColors.green,
+                fontWeight:
+                FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+        child:
+        CircularProgressIndicator(),
+      )
           : RefreshIndicator(
-        onRefresh: () async => _listenNotifications(),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
+        onRefresh:
+        _refreshNotifications,
+        child:
+        SingleChildScrollView(
+          physics:
+          const AlwaysScrollableScrollPhysics(),
           padding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 8,
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
             children: [
               if (_notifications.isEmpty)
                 _buildEmptyState()
               else ...[
                 _topSummary(),
-                const SizedBox(height: 20),
-                _dayHeader('ALL NOTIFICATIONS',
-                    '${_notifications.length} total'),
-                const SizedBox(height: 10),
-                ..._notifications
-                    .map((n) => _buildNotificationCard(n)),
+                const SizedBox(
+                  height: 20,
+                ),
+                _dayHeader(
+                  'ALL NOTIFICATIONS',
+                  '${_notifications.length} total',
+                ),
+                const SizedBox(
+                  height: 10,
+                ),
+                ..._notifications.map(
+                      (notification) =>
+                      _buildNotificationCard(
+                        notification,
+                      ),
+                ),
               ],
-              const SizedBox(height: 20),
+              const SizedBox(
+                height: 20,
+              ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: const PennyBottomNav(currentIndex: 0),
+      bottomNavigationBar:
+      const PennyBottomNav(
+        currentIndex: 0,
+      ),
     );
   }
 
   Widget _buildEmptyState() {
     return Padding(
-      padding: const EdgeInsets.only(top: 100),
+      padding:
+      const EdgeInsets.only(
+        top: 100,
+      ),
       child: Center(
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                  color: AppColors.fill, shape: BoxShape.circle),
-              child: const Icon(Icons.notifications_none,
-                  color: AppColors.muted, size: 40),
+              padding:
+              const EdgeInsets.all(16),
+              decoration:
+              const BoxDecoration(
+                color: AppColors.fill,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.notifications_none,
+                color: AppColors.muted,
+                size: 40,
+              ),
             ),
-            const SizedBox(height: 16),
-            const Text("You're all caught up!",
-                style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    color: AppColors.ink)),
-            const SizedBox(height: 6),
+            const SizedBox(
+              height: 16,
+            ),
             const Text(
-              'No new notifications right now.\nWe\'ll alert you when something happens.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.muted, fontSize: 13),
+              "You're all caught up!",
+              style: TextStyle(
+                fontWeight:
+                FontWeight.w800,
+                fontSize: 18,
+                color: AppColors.ink,
+              ),
+            ),
+            const SizedBox(
+              height: 6,
+            ),
+            const Text(
+              'No new notifications right now.\n'
+                  'We\'ll alert you when something happens.',
+              textAlign:
+              TextAlign.center,
+              style: TextStyle(
+                color: AppColors.muted,
+                fontSize: 13,
+              ),
             ),
           ],
         ),
@@ -241,96 +585,180 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   Widget _topSummary() {
     final unread =
-        _notifications.where((n) => n['isRead'] != true).length;
+        _notifications.where(
+              (n) => n['isRead'] != true,
+        ).length;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding:
+      const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.track),
+        borderRadius:
+        BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.track,
+        ),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: const BoxDecoration(
-                color: AppColors.amberSoft, shape: BoxShape.circle),
-            child:
-            const Icon(Icons.emoji_events, color: AppColors.amber),
+            padding:
+            const EdgeInsets.all(10),
+            decoration:
+            const BoxDecoration(
+              color:
+              AppColors.amberSoft,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.emoji_events,
+              color: AppColors.amber,
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(
+            width: 12,
+          ),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+              CrossAxisAlignment.start,
               children: [
-                const Text('Your Notifications',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: AppColors.ink)),
-                Text('$unread unread',
-                    style: const TextStyle(
-                        color: AppColors.muted, fontSize: 13)),
+                const Text(
+                  'Your Notifications',
+                  style: TextStyle(
+                    fontWeight:
+                    FontWeight.w800,
+                    fontSize: 16,
+                    color: AppColors.ink,
+                  ),
+                ),
+                Text(
+                  '$unread unread',
+                  style:
+                  const TextStyle(
+                    color:
+                    AppColors.muted,
+                    fontSize: 13,
+                  ),
+                ),
               ],
             ),
           ),
           if (unread > 0)
             Container(
               padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                  color: AppColors.redSoft,
-                  borderRadius: BorderRadius.circular(20)),
-              child: Text('$unread new',
-                  style: const TextStyle(
-                      color: AppColors.red,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800)),
+              const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 6,
+              ),
+              decoration:
+              BoxDecoration(
+                color:
+                AppColors.redSoft,
+                borderRadius:
+                BorderRadius.circular(
+                  20,
+                ),
+              ),
+              child: Text(
+                '$unread new',
+                style:
+                const TextStyle(
+                  color: AppColors.red,
+                  fontSize: 12,
+                  fontWeight:
+                  FontWeight.w800,
+                ),
+              ),
             ),
         ],
       ),
     );
   }
 
-  Widget _dayHeader(String d, String right) {
+  Widget _dayHeader(
+      String d,
+      String right,
+      ) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment:
+      MainAxisAlignment.spaceBetween,
       children: [
-        Text(d,
-            style: const TextStyle(
-                color: AppColors.muted,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-                letterSpacing: 1)),
-        Text(right,
-            style: const TextStyle(
-                color: AppColors.muted, fontSize: 12)),
+        Text(
+          d,
+          style:
+          const TextStyle(
+            color: AppColors.muted,
+            fontWeight:
+            FontWeight.w800,
+            fontSize: 12,
+            letterSpacing: 1,
+          ),
+        ),
+        Text(
+          right,
+          style:
+          const TextStyle(
+            color: AppColors.muted,
+            fontSize: 12,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildNotificationCard(Map<String, dynamic> n) {
-    final title = (n['title'] ?? 'Notification').toString();
-    final body = (n['body'] ?? '').toString();
-    final type = (n['type'] ?? 'alert').toString();
-    final isRead = n['isRead'] == true;
-    final isPinned = n['isPinned'] == true;
-    final createdAt = n['createdAt'] ?? 0;
-    final key = n['_key'] ?? '';
+  Widget _buildNotificationCard(
+      Map<String, dynamic> n,
+      ) {
+    final title =
+    (n['title'] ??
+        'Notification')
+        .toString();
 
-    IconData icon = Icons.notifications;
-    Color icoCol = AppColors.blue;
-    Color icoBg = AppColors.blueSoft;
+    final body =
+    (n['body'] ?? '')
+        .toString();
+
+    final type =
+    (n['type'] ??
+        'alert')
+        .toString();
+
+    final isRead =
+        n['isRead'] == true;
+
+    final isPinned =
+        n['isPinned'] == true;
+
+    final createdAt =
+        n['createdAt'] ?? 0;
+
+    final key =
+    (n['_key'] ?? '')
+        .toString();
+
+    IconData icon =
+        Icons.notifications;
+
+    Color icoCol =
+        AppColors.blue;
+
+    Color icoBg =
+        AppColors.blueSoft;
+
     if (type == 'learning') {
       icon = Icons.menu_book;
       icoCol = AppColors.green;
       icoBg = AppColors.greenSoft;
     } else if (type == 'alert') {
-      icon = Icons.warning_amber_rounded;
+      icon =
+          Icons.warning_amber_rounded;
       icoCol = AppColors.red;
       icoBg = AppColors.redSoft;
     } else if (type == 'goal') {
-      icon = Icons.emoji_events;
+      icon =
+          Icons.emoji_events;
       icoCol = AppColors.amber;
       icoBg = AppColors.amberSoft;
     }
@@ -338,91 +766,169 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     return GestureDetector(
       onTap: () async {
         await _markAsRead(key);
+
+        if (!mounted) {
+          return;
+        }
+
         if (type == 'learning') {
-          Navigator.pushNamed(context, '/learning');
+          Navigator.pushNamed(
+            context,
+            '/learning',
+          );
         }
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
+        margin:
+        const EdgeInsets.only(
+          bottom: 12,
+        ),
+        padding:
+        const EdgeInsets.all(16),
+        decoration:
+        BoxDecoration(
           color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius:
+          BorderRadius.circular(
+            16,
+          ),
           border: Border.all(
-              color: isRead
-                  ? AppColors.track
-                  : AppColors.green.withValues(alpha: 0.5),
-              width: isRead ? 1 : 1.5),
+            color: isRead
+                ? AppColors.track
+                : AppColors.green
+                .withValues(
+              alpha: 0.5,
+            ),
+            width:
+            isRead ? 1 : 1.5,
+          ),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+              CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding:
+                  const EdgeInsets.all(
+                    10,
+                  ),
                   decoration:
-                  BoxDecoration(color: icoBg, shape: BoxShape.circle),
-                  child: Icon(icon, color: icoCol, size: 22),
+                  BoxDecoration(
+                    color: icoBg,
+                    shape:
+                    BoxShape.circle,
+                  ),
+                  child: Icon(
+                    icon,
+                    color: icoCol,
+                    size: 22,
+                  ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(
+                  width: 12,
+                ),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                    CrossAxisAlignment
+                        .start,
                     children: [
                       Row(
                         children: [
                           Expanded(
                             child: Text(
                               title,
-                              style: TextStyle(
+                              style:
+                              TextStyle(
                                 fontWeight: isRead
                                     ? FontWeight.w600
                                     : FontWeight.w800,
                                 fontSize: 14,
-                                color: AppColors.ink,
+                                color:
+                                AppColors.ink,
                               ),
                             ),
                           ),
                           if (isPinned)
-                            const Icon(Icons.push_pin,
-                                size: 14, color: AppColors.green),
+                            const Icon(
+                              Icons.push_pin,
+                              size: 14,
+                              color:
+                              AppColors.green,
+                            ),
                           if (!isRead)
                             Container(
-                              margin: const EdgeInsets.only(left: 6),
+                              margin:
+                              const EdgeInsets.only(
+                                left: 6,
+                              ),
                               width: 8,
                               height: 8,
-                              decoration: const BoxDecoration(
-                                  color: AppColors.green,
-                                  shape: BoxShape.circle),
+                              decoration:
+                              const BoxDecoration(
+                                color:
+                                AppColors.green,
+                                shape:
+                                BoxShape.circle,
+                              ),
                             ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(body,
-                          style: const TextStyle(
-                              color: AppColors.muted,
-                              fontSize: 12,
-                              height: 1.4)),
+                      const SizedBox(
+                        height: 4,
+                      ),
+                      Text(
+                        body,
+                        style:
+                        const TextStyle(
+                          color:
+                          AppColors.muted,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(
+              height: 10,
+            ),
             Row(
               children: [
-                Text(_formatDate(createdAt),
-                    style: const TextStyle(
-                        color: AppColors.muted, fontSize: 11)),
+                Text(
+                  _formatDate(
+                    createdAt,
+                  ),
+                  style:
+                  const TextStyle(
+                    color:
+                    AppColors.muted,
+                    fontSize: 11,
+                  ),
+                ),
                 const Spacer(),
                 GestureDetector(
-                  onTap: () => _togglePin(key, isPinned),
+                  onTap: () {
+                    _togglePin(
+                      key,
+                      isPinned,
+                    );
+                  },
                   child: Icon(
-                    isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    isPinned
+                        ? Icons.push_pin
+                        : Icons
+                        .push_pin_outlined,
                     size: 16,
-                    color: isPinned ? AppColors.green : AppColors.muted,
+                    color: isPinned
+                        ? AppColors.green
+                        : AppColors.muted,
                   ),
                 ),
               ],
@@ -433,16 +939,41 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     );
   }
 
-  String _formatDate(dynamic ts) {
-    if (ts == null) return '';
+  String _formatDate(
+      dynamic ts,
+      ) {
+    final timestamp =
+    _getTimestamp(ts);
+
+    if (timestamp == 0) {
+      return '';
+    }
+
     try {
       final dt =
-      DateTime.fromMillisecondsSinceEpoch((ts as num).toInt());
-      final diff = DateTime.now().difference(dt);
-      if (diff.inMinutes < 1) return 'Just now';
-      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-      if (diff.inHours < 24) return '${diff.inHours}h ago';
-      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      DateTime.fromMillisecondsSinceEpoch(
+        timestamp,
+      );
+
+      final diff =
+      DateTime.now().difference(dt);
+
+      if (diff.inMinutes < 1) {
+        return 'Just now';
+      }
+
+      if (diff.inMinutes < 60) {
+        return '${diff.inMinutes}m ago';
+      }
+
+      if (diff.inHours < 24) {
+        return '${diff.inHours}h ago';
+      }
+
+      if (diff.inDays < 7) {
+        return '${diff.inDays}d ago';
+      }
+
       return '${dt.day}/${dt.month}/${dt.year}';
     } catch (_) {
       return '';
