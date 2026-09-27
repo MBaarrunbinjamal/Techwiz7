@@ -24,9 +24,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _totalIncome = 0;
   double _totalExpense = 0;
   int _totalTransactions = 0;
+  int _totalIncomeEntries = 0;
+  int _totalExpenseEntries = 0;
 
+  List<Map<String, dynamic>> _allUsers = [];
   List<Map<String, dynamic>> _recentUsers = [];
   bool _isLoading = true;
+
+  int _selectedTab = 0; // 0=Overview, 1=Users, 2=Content, 3=Analytics
 
   @override
   void initState() {
@@ -38,60 +43,99 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Users
+      // ============ USERS ============
       final usersSnap = await _db.child('users').get();
       int activeCount = 0;
       int totalCount = 0;
       final List<Map<String, dynamic>> usersList = [];
 
-      if (usersSnap.exists && usersSnap.value is Map) {
-        final users = Map<String, dynamic>.from(usersSnap.value as Map);
-        totalCount = users.length;
-
-        users.forEach((uid, value) {
-          if (value is Map) {
-            final u = Map<String, dynamic>.from(value);
-            final isActive = u['isActive'];
-            final status = (u['status'] ?? u['Status'] ?? '').toString().toLowerCase();
-            if (isActive == true ||
-                status == 'active' ||
-                (isActive == null && status.isEmpty)) {
-              activeCount++;
+      if (usersSnap.exists && usersSnap.value != null) {
+        final raw = usersSnap.value;
+        if (raw is Map) {
+          final users = Map<String, dynamic>.from(raw);
+          totalCount = users.length;
+          users.forEach((uid, value) {
+            if (value is Map) {
+              final u = Map<String, dynamic>.from(value);
+              final isActive = u['isActive'];
+              final status =
+              (u['status'] ?? u['Status'] ?? '').toString().toLowerCase();
+              final bool isUserActive = (isActive == true) ||
+                  status == 'active' ||
+                  (isActive == null && status.isEmpty);
+              if (isUserActive) activeCount++;
+              usersList.add({...u, 'userId': uid, '_isActive': isUserActive});
             }
-            usersList.add({...u, 'userId': uid});
+          });
+        } else if (raw is List) {
+          for (int i = 0; i < raw.length; i++) {
+            final v = raw[i];
+            if (v is Map) {
+              final u = Map<String, dynamic>.from(v);
+              totalCount++;
+              final isActive = u['isActive'];
+              final status =
+              (u['status'] ?? u['Status'] ?? '').toString().toLowerCase();
+              final bool isUserActive = (isActive == true) ||
+                  status == 'active' ||
+                  (isActive == null && status.isEmpty);
+              if (isUserActive) activeCount++;
+              usersList.add(
+                  {...u, 'userId': i.toString(), '_isActive': isUserActive});
+            }
           }
-        });
+        }
       }
 
-      // Income
+      // ============ INCOME ============
       double income = 0;
       int incomeCount = 0;
       try {
         final incomeSnap = await _db.child('income').get();
-        if (incomeSnap.exists && incomeSnap.value is Map) {
-          final data = Map<String, dynamic>.from(incomeSnap.value as Map);
-          data.forEach((_, v) {
-            if (v is Map) {
-              income += _parseAmount(v['amount']);
-              incomeCount++;
+        if (incomeSnap.exists && incomeSnap.value != null) {
+          final raw = incomeSnap.value;
+          if (raw is List) {
+            for (final v in raw) {
+              if (v is Map) {
+                income += _parseAmount(v['amount']);
+                incomeCount++;
+              }
             }
-          });
+          } else if (raw is Map) {
+            final data = Map<String, dynamic>.from(raw);
+            data.forEach((_, v) {
+              if (v is Map) {
+                income += _parseAmount(v['amount']);
+                incomeCount++;
+              }
+            });
+          }
         }
       } catch (_) {}
 
-      // Expense
+      // ============ EXPENSE ============
       double expense = 0;
       int expenseCount = 0;
       try {
         final expenseSnap = await _db.child('expense').get();
-        if (expenseSnap.exists && expenseSnap.value is Map) {
-          final data = Map<String, dynamic>.from(expenseSnap.value as Map);
-          data.forEach((_, v) {
-            if (v is Map) {
-              expense += _parseAmount(v['amount']);
-              expenseCount++;
+        if (expenseSnap.exists && expenseSnap.value != null) {
+          final raw = expenseSnap.value;
+          if (raw is List) {
+            for (final v in raw) {
+              if (v is Map) {
+                expense += _parseAmount(v['amount']);
+                expenseCount++;
+              }
             }
-          });
+          } else if (raw is Map) {
+            final data = Map<String, dynamic>.from(raw);
+            data.forEach((_, v) {
+              if (v is Map) {
+                expense += _parseAmount(v['amount']);
+                expenseCount++;
+              }
+            });
+          }
         }
       } catch (_) {}
 
@@ -100,7 +144,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _activeUsers = activeCount;
         _totalIncome = income;
         _totalExpense = expense;
+        _totalIncomeEntries = incomeCount;
+        _totalExpenseEntries = expenseCount;
         _totalTransactions = incomeCount + expenseCount;
+        _allUsers = usersList;
         _recentUsers = usersList.reversed.take(3).toList();
         _isLoading = false;
       });
@@ -146,18 +193,270 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 16),
               _buildStatusRow(),
               const SizedBox(height: 16),
-              _buildMetricsGrid(context),
-              const SizedBox(height: 16),
-              _buildSavingsGoalsCard(context),
-              const SizedBox(height: 24),
-              _buildQuickActions(context),
-              const SizedBox(height: 24),
-              _buildRecentActivity(context),
+              _buildTabContent(context),
               const SizedBox(height: 24),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTabContent(BuildContext context) {
+    switch (_selectedTab) {
+      case 0:
+        return _buildOverviewTab(context);
+      case 1:
+        return _buildUsersTab(context);
+      case 2:
+        return _buildContentTab(context);
+      case 3:
+        return _buildAnalyticsTab(context);
+      default:
+        return _buildOverviewTab(context);
+    }
+  }
+
+  Widget _buildOverviewTab(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildMetricsGrid(context),
+        const SizedBox(height: 16),
+        _buildFinancialOverviewCard(context),
+        const SizedBox(height: 24),
+        _buildQuickActions(context),
+        const SizedBox(height: 24),
+        _buildRecentActivity(context),
+      ],
+    );
+  }
+
+  Widget _buildUsersTab(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                context,
+                'Total Students',
+                '$_totalStudents',
+                'Registered',
+                'All',
+                const Color(0xFFE8F5E9),
+                const Color(0xFF2E7D32),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMetricCard(
+                context,
+                'Active',
+                '$_activeUsers',
+                '${_totalStudents > 0 ? ((_activeUsers / _totalStudents) * 100).toStringAsFixed(0) : 0}% of total',
+                'Live',
+                const Color(0xFFFFF3E0),
+                const Color(0xFFEF6C00),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        const Text('All Registered Users',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        if (_allUsers.isEmpty)
+          _buildEmptyBox('No users registered yet')
+        else
+          ..._allUsers.reversed.map((u) => _buildUserListTile(u)),
+      ],
+    );
+  }
+
+  Widget _buildUserListTile(Map<String, dynamic> u) {
+    final first = (u['FirstName'] ?? '').toString();
+    final last = (u['LastName'] ?? '').toString();
+    final email = (u['Email'] ?? '').toString();
+    final role = (u['Role'] ?? 'User').toString();
+    final isActive = u['_isActive'] == true;
+
+    final name = '$first $last'.trim().isEmpty ? 'Unknown' : '$first $last';
+    final initials = first.isNotEmpty
+        ? (first[0] + (last.isNotEmpty ? last[0] : '')).toUpperCase()
+        : '?';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: isActive
+                ? const Color(0xFFE8F5E9)
+                : const Color(0xFFFFEBEE),
+            child: Text(initials,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isActive
+                        ? const Color(0xFF2E7D32)
+                        : const Color(0xFFC62828))),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold)),
+                Text(email,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                Text(role,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? const Color(0xFFE8F5E9)
+                  : const Color(0xFFFFEBEE),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              isActive ? 'Active' : 'Deactivated',
+              style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  color: isActive
+                      ? const Color(0xFF2E7D32)
+                      : const Color(0xFFC62828)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContentTab(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: const [
+          Icon(Icons.article_outlined, size: 48, color: Colors.grey),
+          SizedBox(height: 12),
+          Text('Content Management',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          SizedBox(height: 6),
+          Text(
+            'Publish learning content, financial tips\nand educational resources here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          SizedBox(height: 16),
+          Text('Coming Soon',
+              style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFFEF6C00),
+                  fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalyticsTab(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                context,
+                'Total Income',
+                _formatMoney(_totalIncome),
+                '$_totalIncomeEntries entries',
+                'IN',
+                const Color(0xFFE8F5E9),
+                const Color(0xFF2E7D32),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMetricCard(
+                context,
+                'Total Expense',
+                _formatMoney(_totalExpense),
+                '$_totalExpenseEntries entries',
+                'OUT',
+                const Color(0xFFFFEBEE),
+                const Color(0xFFC62828),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                context,
+                'Net Balance',
+                _formatMoney(_totalIncome - _totalExpense),
+                'Income - Expense',
+                _totalIncome - _totalExpense >= 0 ? 'Healthy' : 'Negative',
+                const Color(0xFFE3F2FD),
+                const Color(0xFF1565C0),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildMetricCard(
+                context,
+                'Avg / Student',
+                _totalStudents > 0
+                    ? _formatMoney(_totalIncome / _totalStudents)
+                    : 'Rs 0',
+                'Income per user',
+                'AVG',
+                const Color(0xFFF1F8E9),
+                const Color(0xFF2E7D32),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _buildFinancialOverviewCard(context),
+      ],
+    );
+  }
+
+  Widget _buildEmptyBox(String text) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+      ),
+      child: Text(text,
+          style: const TextStyle(color: Colors.grey, fontSize: 12)),
     );
   }
 
@@ -171,30 +470,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildTabItem(context, 'Overview', true),
-          _buildTabItem(context, 'Users', false),
-          _buildTabItem(context, 'Content', false),
-          _buildTabItem(context, 'Analytics', false),
+          _buildTabItem(context, 'Overview', 0),
+          _buildTabItem(context, 'Users', 1),
+          _buildTabItem(context, 'Content', 2),
+          _buildTabItem(context, 'Analytics', 3),
         ],
       ),
     );
   }
 
-  Widget _buildTabItem(BuildContext context, String text, bool isActive) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: isActive ? Theme.of(context).cardColor : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: isActive
-              ? Theme.of(context).textTheme.bodyLarge?.color
-              : Colors.grey,
-          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-          fontSize: 12,
+  Widget _buildTabItem(BuildContext context, String text, int index) {
+    final isActive = _selectedTab == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTab = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? Theme.of(context).cardColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isActive
+                ? Theme.of(context).textTheme.bodyLarge?.color
+                : Colors.grey,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            fontSize: 12,
+          ),
         ),
       ),
     );
@@ -226,7 +529,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildMetricsGrid(BuildContext context) {
     return Column(
       children: [
-        // Row 1: Total Students + Active Users
         Row(
           children: [
             Expanded(
@@ -255,8 +557,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         const SizedBox(height: 12),
-
-        // Row 2: Total Income + Total Expense  ← NEW
         Row(
           children: [
             Expanded(
@@ -264,7 +564,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 context,
                 'Total Income',
                 _formatMoney(_totalIncome),
-                'All users combined',
+                'All users • $_totalIncomeEntries entries',
                 '+ Income',
                 const Color(0xFFE8F5E9),
                 const Color(0xFF2E7D32),
@@ -276,7 +576,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 context,
                 'Total Expense',
                 _formatMoney(_totalExpense),
-                'All users combined',
+                'All users • $_totalExpenseEntries entries',
                 '- Expense',
                 const Color(0xFFFFEBEE),
                 const Color(0xFFC62828),
@@ -285,8 +585,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         const SizedBox(height: 12),
-
-        // Row 3: Txns + Balance
         Row(
           children: [
             Expanded(
@@ -370,7 +668,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSavingsGoalsCard(BuildContext context) {
+  Widget _buildFinancialOverviewCard(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -437,7 +735,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 4),
                     Text(_formatMoney(_totalExpense),
                         style: const TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFC62828))),
                   ],
                 ),
               ],
@@ -627,11 +927,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 12),
         if (_recentUsers.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(20),
-            child: Text('No users yet',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
-          )
+          _buildEmptyBox('No users yet')
         else
           ..._recentUsers.map((u) {
             final first = (u['FirstName'] ?? '').toString();

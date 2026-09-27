@@ -6,6 +6,7 @@ import 'package:techwiz7/Models/income.dart';
 import 'package:techwiz7/Models/users.dart';
 import 'package:techwiz7/Models/TransactionModel.dart';
 import 'package:techwiz7/Models/goal.dart';
+import 'package:techwiz7/Models/BudgetModel.dart';
 
 class DatabaseHelper {
   static Database? database;
@@ -14,7 +15,14 @@ class DatabaseHelper {
   // The database field above is static, so every instance shares one db.
   static final DatabaseHelper instance = DatabaseHelper();
 
-  bool _isSyncing = false;
+  // Separate flags per table — a single shared flag meant that calling
+  // syncPendingIncomes(), syncPendingexpense() and syncPendingBudgets()
+  // around the same time (e.g. all three on app start) let only the first
+  // one actually run; the others returned immediately and silently skipped
+  // their sync, with nothing printed to explain why.
+  bool _isSyncingIncome = false;
+  bool _isSyncingExpense = false;
+  bool _isSyncingBudgets = false;
 
   Future<Database> getDatabase() async {
     if (database != null) {
@@ -22,7 +30,7 @@ class DatabaseHelper {
     }
     database = await openDatabase(
       join(await getDatabasesPath(), 'Pennypal.db'),
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await db.execute('''
         CREATE TABLE users(
@@ -76,6 +84,24 @@ class DatabaseHelper {
           synced INTEGER NOT NULL DEFAULT 0
         )
       ''');
+
+        // Budgets table for the Budget Planner feature.
+        // One row per category per month, scoped by userid like everything else.
+        // How much has actually been spent is NOT stored here — it's derived
+        // live from the expenses table (see getBudgetSpent), so it can never
+        // drift out of sync with the real transactions.
+        // Column is 'budgetLimit', not 'limit', since LIMIT is a SQL keyword.
+        await db.execute('''
+        CREATE TABLE budgets(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          userid TEXT NOT NULL,
+          category TEXT NOT NULL,
+          budgetLimit REAL NOT NULL,
+          month TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active',
+          synced INTEGER NOT NULL DEFAULT 0
+        )
+      ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
 
@@ -107,6 +133,19 @@ class DatabaseHelper {
           monthly REAL,
           targetDate TEXT,
           userid TEXT,
+          synced INTEGER NOT NULL DEFAULT 0
+        )
+      ''');
+
+        // Same for budgets — safe to run on every upgrade.
+        await db.execute('''
+        CREATE TABLE IF NOT EXISTS budgets(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          userid TEXT NOT NULL,
+          category TEXT NOT NULL,
+          budgetLimit REAL NOT NULL,
+          month TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active',
           synced INTEGER NOT NULL DEFAULT 0
         )
       ''');
@@ -220,11 +259,12 @@ class DatabaseHelper {
   Future<void> addIncomeAndSync(Income income) async {
     final id = await addincome(income);
     await syncIncome(id);
+    await _refreshBudgetsForIncomeOrExpense(income.userid, income.source, income.date);
   }
 
   Future<void> syncPendingIncomes() async {
-    if (_isSyncing) return;
-    _isSyncing = true;
+    if (_isSyncingIncome) return;
+    _isSyncingIncome = true;
 
     try {
       final user = await getuserid();
@@ -238,7 +278,7 @@ class DatabaseHelper {
         }
       }
     } finally {
-      _isSyncing = false;
+      _isSyncingIncome = false;
     }
   }
   Future<int> addexpense(expense expense) async {
@@ -315,11 +355,12 @@ class DatabaseHelper {
   Future<void> addexpenseAndSync(expense expense) async {
     final id = await addexpense(expense);
     await syncexpense(id);
+    await _refreshBudgetsForIncomeOrExpense(expense.userid, expense.source, expense.date);
   }
 
   Future<void> syncPendingexpense() async {
-    if (_isSyncing) return;
-    _isSyncing = true;
+    if (_isSyncingExpense) return;
+    _isSyncingExpense = true;
 
     try {
       final user = await getuserid();
@@ -333,7 +374,7 @@ class DatabaseHelper {
         }
       }
     } finally {
-      _isSyncing = false;
+      _isSyncingExpense = false;
     }
   }
   Future<double> getTotalIncome(String userId) async {
@@ -482,5 +523,163 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  // ===================== BUDGETS =====================
+  // Local storage for the Budget Planner feature.
+  // Every method is scoped by userid, like income, expenses and goals.
+  //
+  // IMPORTANT ASSUMPTION: expenses don't have a dedicated 'category' column
+  // in this schema — they use 'source' for that. So a budget's `category`
+  // is matched against the expense's `source` field. If expenses get a real
+  // category column later, swap 'source' for it in getBudgetSpent below.
+
+  // Insert a new budget for a category+month. synced starts at 0.
+  Future<int> insertBudget(BudgetModel budget) async {
+    final db = await getDatabase();
+    final map = budget.toMap();
+    map.remove('id'); // let SQLite assign it
+    map['synced'] = 0;
+    return await db.insert('budgets', map);
+  }
+
+  // All budgets for a user, optionally filtered to one month ('YYYY-MM').
+  Future<List<BudgetModel>> getBudgets(String userId, {String? month}) async {
+    final db = await getDatabase();
+    final rows = await db.query(
+      'budgets',
+      where: month != null ? 'userid = ? AND month = ?' : 'userid = ?',
+      whereArgs: month != null ? [userId, month] : [userId],
+      orderBy: 'category ASC',
+    );
+    return rows.map((e) => BudgetModel.fromMap(e)).toList();
+  }
+
+  // Change a budget's limit. synced resets to 0 so it re-pushes to Firebase.
+  Future<void> updateBudgetLimit(int id, double limit) async {
+    final db = await getDatabase();
+    await db.update(
+      'budgets',
+      {'budgetLimit': limit, 'synced': 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> deleteBudget(int id) async {
+    final db = await getDatabase();
+    await db.delete('budgets', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // How much has been spent against this category this month — derived
+  // live from the expenses table, never stored on the budget row itself.
+  Future<double> getBudgetSpent(String userId, String category, String month) async {
+    final db = await getDatabase();
+    final result = await db.rawQuery(
+      '''
+      SELECT SUM(amount) AS total FROM expenses
+      WHERE userid = ? AND source = ? AND strftime('%Y-%m', date) = ?
+      ''',
+      [userId, category, month],
+    );
+    final value = result.first['total'];
+    return value == null ? 0.0 : (value as num).toDouble();
+  }
+
+  // Recomputes spend vs limit for one budget and flips its status locally
+  // ('active' <-> 'exceeded') when it changed. Marks it unsynced so the
+  // new status reaches Firebase on the next sync pass.
+  Future<void> refreshBudgetStatus(int id) async {
+    final db = await getDatabase();
+    final rows = await db.query('budgets', where: 'id = ?', whereArgs: [id]);
+    if (rows.isEmpty) return;
+
+    final row = rows.first;
+    final spent = await getBudgetSpent(
+      row['userid'] as String,
+      row['category'] as String,
+      row['month'] as String,
+    );
+    final limit = (row['budgetLimit'] as num).toDouble();
+    final newStatus = spent >= limit ? 'exceeded' : 'active';
+
+    if (newStatus != row['status']) {
+      await db.update(
+        'budgets',
+        {'status': newStatus, 'synced': 0},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+  }
+
+  // Called after every income/expense insert so budgets stay current
+  // without the UI having to remember to refresh them manually.
+  Future<void> _refreshBudgetsForIncomeOrExpense(
+      String userId,
+      String source,
+      DateTime date,
+      ) async {
+    final db = await getDatabase();
+    final month =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}';
+    final matches = await db.query(
+      'budgets',
+      where: 'userid = ? AND category = ? AND month = ?',
+      whereArgs: [userId, source, month],
+    );
+    for (final row in matches) {
+      await refreshBudgetStatus(row['id'] as int);
+    }
+  }
+
+  Future<void> syncBudget(int id) async {
+    final db = await getDatabase();
+    final result = await db.query('budgets', where: 'id = ?', whereArgs: [id]);
+    if (result.isEmpty) return;
+
+    final budget = result.first;
+
+    try {
+      await FirebaseDatabase.instance.ref('budgets/$id').set({
+        'userid': budget['userid'],
+        'category': budget['category'],
+        'limit': budget['budgetLimit'],
+        'month': budget['month'],
+        'status': budget['status'],
+      });
+
+      await db.update('budgets', {'synced': 1}, where: 'id = ?', whereArgs: [id]);
+    } catch (e) {
+      print('SYNC FAILED for budget id=$id: $e');
+    }
+  }
+
+  Future<void> addBudgetAndSync(BudgetModel budget) async {
+    final id = await insertBudget(budget);
+    await syncBudget(id);
+  }
+
+  Future<void> syncPendingBudgets() async {
+    if (_isSyncingBudgets) return;
+    _isSyncingBudgets = true;
+
+    try {
+      final user = await getuserid();
+      if (user == null) return;
+
+      final db = await getDatabase();
+      final pending = await db.query(
+        'budgets',
+        where: 'userid = ? AND synced = 0',
+        whereArgs: [user.userId],
+      );
+
+      for (final row in pending) {
+        await syncBudget(row['id'] as int);
+      }
+    } finally {
+      _isSyncingBudgets = false;
+    }
   }
 }

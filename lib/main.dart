@@ -41,7 +41,8 @@ void main() async {
   permisions().getnotificationpermision();
   IncomeSyncService().start();
   expenseSyncService().start();
-  await DatabaseHelper  ().syncPendingIncomes();
+  await DatabaseHelper().syncPendingIncomes();
+  await DatabaseHelper().syncPendingexpense();
   runApp(const PennyPalApp());
 }
 
