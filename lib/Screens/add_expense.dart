@@ -12,11 +12,10 @@ class AddExpense extends StatefulWidget {
 }
 
 class _AddExpense extends State<AddExpense> {
-  final _amountController = TextEditingController(text: '18.50');
-  final _descriptionController =
-  TextEditingController(text: 'Chipotle Burrito Bowl with friends');
+  final _amountController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
-  String _selectedCategory = 'Food';
+  String _selectedCategory = '';
   DateTime _selectedDate = DateTime.now();
 
   List<expense> _expenseList = [];
@@ -163,6 +162,16 @@ class _AddExpense extends State<AddExpense> {
       return;
     }
 
+    // No category is selected by default now, so make sure one is picked.
+    if (_selectedCategory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a category'),
+        ),
+      );
+      return;
+    }
+
     final userId = await PrefsService.instance.getUserId();
 
     if (userId == null || userId.isEmpty) {
@@ -261,8 +270,11 @@ class _AddExpense extends State<AddExpense> {
               const SizedBox(height: 20),
               _amountBlock(),
               const SizedBox(height: 20),
-              _aiPill(),
-              const SizedBox(height: 22),
+              // AI pill only shows once a category is chosen.
+              if (_selectedCategory.isNotEmpty) ...[
+                _aiPill(),
+                const SizedBox(height: 22),
+              ],
               _categorySection(),
               const SizedBox(height: 22),
               _label('Date'),
@@ -272,8 +284,6 @@ class _AddExpense extends State<AddExpense> {
               _label('Description'),
               const SizedBox(height: 8),
               _descriptionField(),
-              const SizedBox(height: 18),
-              _limitCard(),
               const SizedBox(height: 20),
               _saveButton(),
               const SizedBox(height: 28),
@@ -521,6 +531,12 @@ class _AddExpense extends State<AddExpense> {
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   isCollapsed: true,
+                  hintText: '0.00',
+                  hintStyle: TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.muted,
+                  ),
                 ),
               ),
             ),
@@ -840,6 +856,11 @@ class _AddExpense extends State<AddExpense> {
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 isCollapsed: true,
+                hintText: 'Add a note (optional)',
+                hintStyle: TextStyle(
+                  fontSize: 15,
+                  color: AppColors.muted,
+                ),
               ),
             ),
           ),
@@ -847,77 +868,6 @@ class _AddExpense extends State<AddExpense> {
             Icons.edit_note,
             size: 20,
             color: AppColors.muted,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _limitCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.track,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(
-              color: AppColors.greenSoft,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.verified_user_outlined,
-              color: AppColors.green,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'Within Food & Dining limit',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  '\$124.50 left of \$250.00 monthly cap',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 54,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: const LinearProgressIndicator(
-                value: 0.5,
-                minHeight: 8,
-                backgroundColor: AppColors.track,
-                valueColor:
-                AlwaysStoppedAnimation<Color>(
-                  AppColors.green,
-                ),
-              ),
-            ),
           ),
         ],
       ),

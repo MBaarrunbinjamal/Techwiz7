@@ -18,7 +18,6 @@ class _Dashboard extends State<Dashboard> {
   @override
 
   String firstname = '';
-  String lastname = '';
   double totalincome = 0;
   double monthlyincome = 0;
   double totalexpense = 0;
@@ -81,7 +80,6 @@ class _Dashboard extends State<Dashboard> {
 
     setState(() {
       firstname = data['FirstName']?.toString() ?? '';
-      lastname = data['LastName']?.toString() ?? '';
     });
   }
 
@@ -176,7 +174,7 @@ class _Dashboard extends State<Dashboard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$firstname $lastname',
+                '$firstname',
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
@@ -402,7 +400,7 @@ class _Dashboard extends State<Dashboard> {
         children: [
           _quickAction(Icons.add, 'Add\nIncome', AppColors.greenSoft, AppColors.green,route: '/addincome'),
           _quickAction(Icons.remove, 'Add\nExpense', AppColors.amberSoft, AppColors.amber, route: '/add-expense'),
-          _quickAction(Icons.pie_chart_outline, 'Budgets', const Color(0xFFEDEBFB), const Color(0xFF6D5DD3), route: '/budget'),
+          _quickAction(Icons.pie_chart_outline, 'Budgets', const Color(0xFFEDEBFB), const Color(0xFF6D5DD3), route: '/savings'),
           _quickAction(Icons.auto_awesome, 'AI Advice', const Color(0xFFE7EBFF), const Color(0xFF3B5BFF), route: '/ai'),
         ],
       ),
