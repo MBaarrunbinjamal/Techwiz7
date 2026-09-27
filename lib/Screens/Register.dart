@@ -26,7 +26,6 @@ class _RegisterState extends State<Register> {
 
   bool _hidePassword = true;
   bool _hideConfirm = true;
-  bool _agreed = true;
   bool _isLoading = false;
 
   @override
@@ -42,29 +41,24 @@ class _RegisterState extends State<Register> {
   Future<void> _handleRegister() async {
     final name = fullNameController.text.trim();
     final email = emailController.text.trim();
+    final phone = mobileController.text.trim();
     final password = passwordController.text;
     final confirm = confirmController.text;
 
-    if (name.isEmpty || email.isEmpty || password.isEmpty) {
-      _showMessage('Fill in your name, email, and password');
+    if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty) {
+      _showMessage('Fill in your name, email, phone, and password');
       return;
     }
     if (password != confirm) {
       _showMessage('Passwords do not match');
       return;
     }
-    if (!_agreed) {
-      _showMessage('Please agree to the Terms and Privacy Policy');
-      return;
-    }
 
-    final parts = name.split(RegExp(r'\s+'));
-    final firstName = parts.first;
-    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+    final firstName = name.split(RegExp(r'\s+')).first;
 
     setState(() => _isLoading = true);
     try {
-      await _auth.signUp(email: email, password: password, firstname: firstName, lastname: lastName);
+      await _auth.signUp(email: email, password: password, firstname: firstName, phone: phone);
       if (!mounted) return;
       _showMessage('Account created. Check your email to verify.');
       Navigator.pushReplacementNamed(context, '/email');
@@ -123,14 +117,8 @@ class _RegisterState extends State<Register> {
                   _passwordField(),
                   const SizedBox(height: 20),
                   _confirmPasswordField(),
-                  const SizedBox(height: 20),
-                  _termsRow(),
                   const SizedBox(height: 24),
                   _createButton(),
-                  const SizedBox(height: 20),
-                  _orDivider(),
-                  const SizedBox(height: 16),
-                  _socialButtons(),
                   const SizedBox(height: 28),
                   _loginLink(),
                   const SizedBox(height: 24),
@@ -188,19 +176,6 @@ class _RegisterState extends State<Register> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(color: _peachColor, borderRadius: BorderRadius.circular(20)),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.auto_awesome, size: 16, color: AppColors.title),
-              SizedBox(width: 6),
-              Text('NextGen BudgetBee', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.title)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
         const Text('Create Account', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppColors.title, letterSpacing: -0.5)),
         const SizedBox(height: 4),
         const Text('Join PennyPal to start budgeting smarter', style: TextStyle(fontSize: 15.5, color: AppColors.body)),
@@ -212,7 +187,7 @@ class _RegisterState extends State<Register> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _fieldLabel('Full Name', const Text('Legal or preferred', style: TextStyle(fontSize: 12, color: AppColors.hint))),
+        _fieldLabel('Full Name'),
         const SizedBox(height: 8),
         TextFormField(controller: fullNameController, style: _inputTextStyle, decoration: _inputDecoration(hint: 'e.g. Alex Johnson', icon: Icons.person_outline_rounded)),
       ],
@@ -223,7 +198,7 @@ class _RegisterState extends State<Register> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _fieldLabel('Student Email', const Text('Get 50% Off Perks', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryDark))),
+        _fieldLabel('Student Email'),
         const SizedBox(height: 8),
         TextFormField(controller: emailController, keyboardType: TextInputType.emailAddress, style: _inputTextStyle, decoration: _inputDecoration(hint: 'alex@college.edu', icon: Icons.mail_outline_rounded)),
       ],
@@ -241,7 +216,7 @@ class _RegisterState extends State<Register> {
           children: [
             Icon(Icons.phone_outlined, size: 18, color: AppColors.body),
             SizedBox(width: 6),
-            Text('+1', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.title)),
+            Text('+92', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.title)),
           ],
         ),
       ),
@@ -252,7 +227,7 @@ class _RegisterState extends State<Register> {
       children: [
         _fieldLabel('Mobile Number'),
         const SizedBox(height: 8),
-        TextFormField(controller: mobileController, keyboardType: TextInputType.phone, style: _inputTextStyle, decoration: _inputDecoration(hint: '(555) 019-2834', prefix: countryCode)),
+        TextFormField(controller: mobileController, keyboardType: TextInputType.phone, style: _inputTextStyle, decoration: _inputDecoration(hint: '300 1234567', prefix: countryCode)),
       ],
     );
   }
@@ -261,7 +236,7 @@ class _RegisterState extends State<Register> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _fieldLabel('Password', _strengthChip()),
+        _fieldLabel('Password'),
         const SizedBox(height: 8),
         TextFormField(
           controller: passwordController,
@@ -329,53 +304,6 @@ class _RegisterState extends State<Register> {
     );
   }
 
-  Widget _strengthChip() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: _peachColor, borderRadius: BorderRadius.circular(20)),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(radius: 3.5, backgroundColor: AppColors.accent),
-          SizedBox(width: 6),
-          Text('Medium strength', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.title)),
-        ],
-      ),
-    );
-  }
-
-  Widget _termsRow() {
-    const linkStyle = TextStyle(color: AppColors.primaryDark, decoration: TextDecoration.underline, decorationColor: AppColors.primaryDark);
-    return Row(
-      children: [
-        SizedBox(
-          width: 24,
-          height: 24,
-          child: Checkbox(
-            value: _agreed,
-            activeColor: AppColors.primary,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            onChanged: (value) => setState(() => _agreed = value ?? false),
-          ),
-        ),
-        const SizedBox(width: 12),
-        const Expanded(
-          child: Text.rich(
-            TextSpan(
-              text: 'I agree to the ',
-              style: TextStyle(fontSize: 13.5, color: AppColors.body),
-              children: [
-                TextSpan(text: 'Terms of Service', style: linkStyle),
-                TextSpan(text: ' & '),
-                TextSpan(text: 'Privacy Policy', style: linkStyle),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _createButton() {
     return SizedBox(
       width: double.infinity,
@@ -392,64 +320,11 @@ class _RegisterState extends State<Register> {
         child: _isLoading
             ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
             : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  SizedBox(width: 8),
-                  Icon(Icons.arrow_forward_rounded, size: 20),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Widget _orDivider() {
-    return const Row(
-      children: [
-        Expanded(child: Divider(color: AppColors.border)),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
-          child: Text('OR CONTINUE WITH', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: AppColors.body)),
-        ),
-        Expanded(child: Divider(color: AppColors.border)),
-      ],
-    );
-  }
-
-  Widget _socialButtons() {
-    final googleLogo = ShaderMask(
-      blendMode: BlendMode.srcIn,
-      shaderCallback: (rect) => const SweepGradient(
-        colors: [Color(0xFF4285F4), Color(0xFF34A853), Color(0xFFFBBC05), Color(0xFFEA4335), Color(0xFF4285F4)],
-      ).createShader(rect),
-      child: const Text('G', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-    );
-
-    return Row(
-      children: [
-        Expanded(child: _socialButton('Google', googleLogo)),
-        const SizedBox(width: 12),
-        Expanded(child: _socialButton('Apple', const Icon(Icons.apple, size: 22, color: Colors.black))),
-      ],
-    );
-  }
-
-  Widget _socialButton(String label, Widget icon) {
-    return SizedBox(
-      height: 50,
-      child: OutlinedButton(
-        onPressed: () {},
-        style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.white,
-          side: const BorderSide(color: AppColors.border),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            icon,
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.title)),
+            Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            SizedBox(width: 8),
+            Icon(Icons.arrow_forward_rounded, size: 20),
           ],
         ),
       ),
@@ -489,7 +364,7 @@ class _RegisterState extends State<Register> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Earn \$10 Student Welcome Grant', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.title)),
+                Text('Earn Rs 1,000 Student Welcome Grant', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.title)),
                 SizedBox(height: 4),
                 Text('Complete onboarding to unlock your first automatic savings deposit.', style: TextStyle(fontSize: 13.5, height: 1.35, color: AppColors.body)),
               ],

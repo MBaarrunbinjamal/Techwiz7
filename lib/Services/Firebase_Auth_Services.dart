@@ -17,7 +17,7 @@ class AuthService {
     required String email,
     required String password,
     required String firstname,
-    required String lastname,
+    required String phone,
   }) async {
     final userCredential = await _auth.createUserWithEmailAndPassword(
       email: email,
@@ -29,7 +29,7 @@ class AuthService {
     try {
       await FirebaseDatabase.instance.ref('users/$userId').set({
         'FirstName': firstname,
-        'LastName': lastname,
+        'phonenumber': phone,
         'Email': email,
         'Role': 'User',
       });
@@ -38,7 +38,7 @@ class AuthService {
 
       final userData = Users(
         FirstName: firstname,
-        LastName: lastname,
+        phonenumber: phone,
         email: email,
         password: password,
         userId: userId,

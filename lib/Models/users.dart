@@ -1,14 +1,14 @@
 class Users {
   int? id;
   String FirstName;
-  String LastName ;
+  String phonenumber ;
   String email;
   String  password;
   String  userId;
     Users({
     this.id,
     required this.FirstName,
-    required this.LastName,
+    required this.phonenumber,
     required this.email,
     required this.password,
     required this.userId
@@ -17,7 +17,7 @@ class Users {
       return {
         'id': id,
         'FirstName': FirstName,
-        'LastName': LastName,
+        'phonenumber': phonenumber,
         'email': email,
         'password': password,
         'userId'   : userId
@@ -26,7 +26,7 @@ class Users {
     return Users(
       id: map['id'],
       FirstName: map['FirstName'] ?? '',
-      LastName: map['LastName'] ?? '',
+      phonenumber: map['phonenumber'] ?? '',
       email: map['email'] ?? '',
       password: map['password'] ?? '',
       userId: map['userId'] ?? '',

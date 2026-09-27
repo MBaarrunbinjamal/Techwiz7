@@ -88,8 +88,7 @@ class _LoginState extends State<Login> {
   // ✅ NEW helper — Firebase Realtime DB se deactivated check
   Future<bool> _checkIfDeactivated(String uid) async {
     try {
-      final snap =
-      await FirebaseDatabase.instance.ref('users/$uid').get();
+      final snap = await FirebaseDatabase.instance.ref('users/$uid').get();
 
       if (!snap.exists || snap.value is! Map) return false;
 
@@ -102,7 +101,6 @@ class _LoginState extends State<Login> {
 
       return false;
     } catch (_) {
-      // Agar DB error aaye to login rok mat do — safe default
       return false;
     }
   }
@@ -189,10 +187,18 @@ class _LoginState extends State<Login> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
-                    BoxShadow(color: AppColors.accent.withValues(alpha: 0.30), blurRadius: 32, spreadRadius: 2),
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.30),
+                      blurRadius: 32,
+                      spreadRadius: 2,
+                    ),
                   ],
                 ),
-                child: const Icon(Icons.savings, color: AppColors.green, size: 34),
+                child: const Icon(
+                  Icons.savings,
+                  color: AppColors.green,
+                  size: 34,
+                ),
               ),
               Positioned(
                 top: 2,
@@ -205,14 +211,26 @@ class _LoginState extends State<Login> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.white, width: 2),
                   ),
-                  child: const Icon(Icons.wb_sunny_outlined, size: 15, color: Colors.white),
+                  child: const Icon(
+                    Icons.wb_sunny_outlined,
+                    size: 15,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        const Text('PennyPal', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.title, letterSpacing: -0.5)),
+        const Text(
+          'PennyPal',
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            color: AppColors.title,
+            letterSpacing: -0.5,
+          ),
+        ),
         const SizedBox(height: 8),
         const Text(
           'Welcome back! Manage your student\nfinances with ease.',
@@ -228,7 +246,13 @@ class _LoginState extends State<Login> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 30, offset: const Offset(0, 10))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
@@ -245,10 +269,6 @@ class _LoginState extends State<Login> {
                   _passwordField(),
                   const SizedBox(height: 24),
                   _loginButton(),
-                  const SizedBox(height: 24),
-                  _orDivider(),
-                  const SizedBox(height: 20),
-                  _socialButtons(),
                   const SizedBox(height: 20),
                   const Divider(height: 1, color: AppColors.border),
                   const SizedBox(height: 16),
@@ -266,7 +286,9 @@ class _LoginState extends State<Login> {
     return Container(
       height: 5,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(colors: [AppColors.primary, AppColors.accent, AppColors.primary]),
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.accent, AppColors.primary],
+        ),
       ),
     );
   }
@@ -281,7 +303,10 @@ class _LoginState extends State<Login> {
           controller: emailController,
           keyboardType: TextInputType.emailAddress,
           style: _inputTextStyle,
-          decoration: _fieldDecoration(hint: 'alex@university.edu', prefix: Icons.mail_outline_rounded),
+          decoration: _fieldDecoration(
+            hint: 'alex@university.edu',
+            prefix: Icons.mail_outline_rounded,
+          ),
         ),
       ],
     );
@@ -297,7 +322,14 @@ class _LoginState extends State<Login> {
             _fieldLabel('Password'),
             GestureDetector(
               onTap: _handleForgotPassword,
-              child: const Text('Forgot Password?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primaryDark)),
+              child: const Text(
+                'Forgot Password?',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryDark,
+                ),
+              ),
             ),
           ],
         ),
@@ -311,7 +343,12 @@ class _LoginState extends State<Login> {
             prefix: Icons.lock_outline_rounded,
             suffix: IconButton(
               onPressed: () => setState(() => _hidePassword = !_hidePassword),
-              icon: Icon(_hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: AppColors.body),
+              icon: Icon(
+                _hidePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                color: AppColors.body,
+              ),
             ),
           ),
         ),
@@ -330,71 +367,33 @@ class _LoginState extends State<Login> {
           foregroundColor: Colors.white,
           disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
         child: _isLoading
-            ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+            ? const SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
             : const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('Log In', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
-            SizedBox(width: 8),
-            Icon(Icons.arrow_forward_rounded, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _orDivider() {
-    return const Row(
-      children: [
-        Expanded(child: Divider(color: AppColors.border)),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
-          child: Text('OR CONTINUE WITH', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: AppColors.hint)),
-        ),
-        Expanded(child: Divider(color: AppColors.border)),
-      ],
-    );
-  }
-
-  Widget _socialButtons() {
-    final googleLogo = ShaderMask(
-      blendMode: BlendMode.srcIn,
-      shaderCallback: (rect) => const SweepGradient(
-        colors: [Color(0xFF4285F4), Color(0xFF34A853), Color(0xFFFBBC05), Color(0xFFEA4335), Color(0xFF4285F4)],
-      ).createShader(rect),
-      child: const Text('G', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-    );
-
-    return Row(
-      children: [
-        Expanded(child: _socialButton('Google', googleLogo)),
-        const SizedBox(width: 12),
-        Expanded(child: _socialButton('Apple', const Icon(Icons.apple, size: 22, color: Colors.black))),
-      ],
-    );
-  }
-
-  Widget _socialButton(String label, Widget icon) {
-    return SizedBox(
-      height: 50,
-      child: OutlinedButton(
-        onPressed: () {},
-        style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.white,
-          side: const BorderSide(color: AppColors.border),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            icon,
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.title)),
-          ],
-        ),
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Log In',
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward_rounded, size: 18),
+                ],
+              ),
       ),
     );
   }
@@ -406,7 +405,14 @@ class _LoginState extends State<Login> {
         children: [
           Icon(Icons.shield_outlined, size: 14, color: AppColors.body),
           SizedBox(width: 6),
-          Text('Bank-grade 256-bit student data encryption', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.body)),
+          Text(
+            'Bank-grade 256-bit student data encryption',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: AppColors.body,
+            ),
+          ),
         ],
       ),
     );
@@ -416,25 +422,56 @@ class _LoginState extends State<Login> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text("Don't have an account?  ", style: TextStyle(fontSize: 14, color: AppColors.body)),
+        const Text(
+          "Don't have an account?  ",
+          style: TextStyle(fontSize: 14, color: AppColors.body),
+        ),
         GestureDetector(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const Register())),
-          child: const Text('Register', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primaryDark)),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const Register()),
+          ),
+          child: const Text(
+            'Register',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppColors.primaryDark,
+            ),
+          ),
         ),
       ],
     );
   }
 
   Widget _fieldLabel(String text) {
-    return Text(text, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.title));
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13.5,
+        fontWeight: FontWeight.w700,
+        color: AppColors.title,
+      ),
+    );
   }
 }
 
-const _inputTextStyle = TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.title);
+const _inputTextStyle = TextStyle(
+  fontSize: 15,
+  fontWeight: FontWeight.w500,
+  color: AppColors.title,
+);
 
-InputDecoration _fieldDecoration({required String hint, required IconData prefix, Widget? suffix}) {
+InputDecoration _fieldDecoration({
+  required String hint,
+  required IconData prefix,
+  Widget? suffix,
+}) {
   OutlineInputBorder makeBorder(Color color, [double width = 1]) {
-    return OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: color, width: width));
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(color: color, width: width),
+    );
   }
 
   return InputDecoration(
