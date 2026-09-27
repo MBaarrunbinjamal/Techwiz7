@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
 import 'package:techwiz7/Screens/about_screen.dart';
 import 'package:techwiz7/Screens/add_income.dart';
+import 'package:techwiz7/Services/Firebase_Auth_Services.dart';
 import 'package:techwiz7/Services/expense_sync_service.dart';
 import 'package:techwiz7/Services/income_sync_service.dart';
 import 'package:techwiz7/firebase_options.dart';
@@ -43,6 +44,7 @@ void main() async {
   expenseSyncService().start();
   await DatabaseHelper().syncPendingIncomes();
   await DatabaseHelper().syncPendingexpense();
+  await AuthService().syncFcmToken();
   runApp(const PennyPalApp());
 }
 
