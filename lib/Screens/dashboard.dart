@@ -187,11 +187,6 @@ class _Dashboard extends State<Dashboard> {
           ),
         ),
         const Spacer(),
-        GestureDetector(
-          onTap: () => Navigator.pushNamed(context, '/profile'),
-          child: const Icon(Icons.person_outline, size: 24, color: AppColors.ink),
-        ),
-        const SizedBox(width: 14),
         Stack(
           clipBehavior: Clip.none,
           children: [
