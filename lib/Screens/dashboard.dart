@@ -1,7 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
 import 'package:techwiz7/Services/FirebaseSupabaseService.dart';
+import 'package:techwiz7/Services/PrefsService.dart';
 import 'package:techwiz7/shared/penny_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
@@ -15,10 +16,12 @@ class Dashboard extends StatefulWidget {
 
 class _Dashboard extends State<Dashboard> {
   @override
+
+  String firstname = '';
   double totalincome = 0;
   double monthlyincome = 0;
-  String firstname = '';
-  String lastname = '';
+  double totalexpense = 0;
+  @override
   void initState() {
     // TODO: implement initState
     super.initState();
@@ -26,56 +29,38 @@ class _Dashboard extends State<Dashboard> {
      getIncome();
   }
   Future<void> getIncome() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final uid = await PrefsService.instance.getUserId();
 
-    if (user == null) return;
-
-    final uid = user.uid;
-
-    final data = await FirebaseSupabaseService().read(
-      tableName: 'income',
-    );
-
-    double overall = 0;
-    double monthly = 0;
-
-    final now = DateTime.now();
-
-    if (data != null) {
-      final incomes = Map<String, dynamic>.from(data);
-
-      for (final item in incomes.values) {
-        final income = Map<String, dynamic>.from(item);
-
-        if (income['userid'].toString().trim() != uid.trim()) {
-          continue;
-        }
-
-        final amount = double.tryParse(
-          income['amount'].toString(),
-        ) ??
-            0;
-
-        overall += amount;
-
-        final date = DateTime.tryParse(
-          income['date'].toString(),
-        );
-
-        if (date != null &&
-            date.year == now.year &&
-            date.month == now.month) {
-          monthly += amount;
-        }
-      }
+    if (uid == null || uid.isEmpty) {
+      return;
     }
 
-    if (!mounted) return;
+    try {
+      final db = DatabaseHelper();
 
-    setState(() {
-      totalincome = overall;
-      monthlyincome = monthly;
-    });
+      final overallIncome = await db.getTotalIncome(uid);
+      final monthlyIncome = await db.getMonthlyIncome(uid);
+      final overallExpense = await db.getTotalExpense(uid);
+
+      if (!mounted) return;
+
+      setState(() {
+        totalincome = overallIncome;
+        monthlyincome = monthlyIncome;
+        totalexpense = overallExpense;
+      });
+
+      print('==============================');
+      print('CURRENT USER: $uid');
+      print('TOTAL INCOME: $overallIncome');
+      print('MONTHLY INCOME: $monthlyIncome');
+      print('TOTAL EXPENSE: $overallExpense');
+      print('BALANCE: ${overallIncome - overallExpense}');
+      print('==============================');
+    } catch (e, stackTrace) {
+      print('CALCULATION ERROR: $e');
+      print(stackTrace);
+    }
   }
   Future<void> getusername() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -95,7 +80,6 @@ class _Dashboard extends State<Dashboard> {
 
     setState(() {
       firstname = data['FirstName']?.toString() ?? '';
-      lastname = data['LastName']?.toString() ?? '';
     });
   }
 
@@ -190,7 +174,7 @@ class _Dashboard extends State<Dashboard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$firstname $lastname',
+                '$firstname',
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
@@ -318,7 +302,7 @@ class _Dashboard extends State<Dashboard> {
         Expanded(
           child: _summaryCard(
             title: 'Total Income',
-            amount: '\$${monthlyincome.toStringAsFixed(2)}',
+            amount: '\$${totalincome.toStringAsFixed(2)}',
             totalamount: '\$${totalincome.toStringAsFixed(2)}',
             note: 'On track this mo.',
             noteColor: AppColors.green,
@@ -332,13 +316,14 @@ class _Dashboard extends State<Dashboard> {
         Expanded(
           child: _summaryCard(
             title: 'Total Expenses',
-            amount: '\$679.50',
-            note: '68% of budget cap',
+            amount: '\$${totalexpense.toStringAsFixed(2)}',
+            totalamount: '\$${totalexpense.toStringAsFixed(2)}',
+            note: 'Total spending',
             noteColor: AppColors.amber,
             icon: Icons.arrow_downward,
             iconBg: AppColors.amberSoft,
             iconColor: AppColors.amber,
-            leadIcon: Icons.info_outline, totalamount: '',
+            leadIcon: Icons.receipt_long,
           ),
         ),
       ],
@@ -415,7 +400,7 @@ class _Dashboard extends State<Dashboard> {
         children: [
           _quickAction(Icons.add, 'Add\nIncome', AppColors.greenSoft, AppColors.green,route: '/addincome'),
           _quickAction(Icons.remove, 'Add\nExpense', AppColors.amberSoft, AppColors.amber, route: '/add-expense'),
-          _quickAction(Icons.pie_chart_outline, 'Budgets', const Color(0xFFEDEBFB), const Color(0xFF6D5DD3), route: '/budget'),
+          _quickAction(Icons.pie_chart_outline, 'Budgets', const Color(0xFFEDEBFB), const Color(0xFF6D5DD3), route: '/savings'),
           _quickAction(Icons.auto_awesome, 'AI Advice', const Color(0xFFE7EBFF), const Color(0xFF3B5BFF), route: '/ai'),
         ],
       ),

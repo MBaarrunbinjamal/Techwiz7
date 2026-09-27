@@ -1,9 +1,112 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:techwiz7/shared/penny_bottom_nav.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
-class LearningScreen extends StatelessWidget {
+class LearningScreen extends StatefulWidget {
   const LearningScreen({super.key});
+
+  @override
+  State<LearningScreen> createState() => _LearningScreenState();
+}
+
+class _LearningScreenState extends State<LearningScreen> {
+  final DatabaseReference _db = FirebaseDatabase.instance.ref();
+
+  List<Map<String, dynamic>> _content = [];
+  bool _isLoading = true;
+  bool _hasInternet = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLoad();
+  }
+
+  Future<void> _initLoad() async {
+    // Internet check
+    final connectivity = await Connectivity().checkConnectivity();
+    final hasNet = !connectivity.contains(ConnectivityResult.none);
+    if (!mounted) return;
+    setState(() => _hasInternet = hasNet);
+
+    if (!hasNet) {
+      setState(() => _isLoading = false);
+      return;
+    }
+    _loadContent();
+  }
+
+  Future<void> _loadContent() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Recheck internet before fetching
+    final connectivity = await Connectivity().checkConnectivity();
+    final hasNet = !connectivity.contains(ConnectivityResult.none);
+    if (!hasNet) {
+      if (!mounted) return;
+      setState(() {
+        _hasInternet = false;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final snap = await _db.child('learning').get();
+      final List<Map<String, dynamic>> loaded = [];
+
+      if (snap.exists && snap.value != null) {
+        final raw = snap.value;
+        if (raw is Map) {
+          final data = Map<String, dynamic>.from(raw);
+          data.forEach((key, value) {
+            if (value is Map) {
+              final item = Map<String, dynamic>.from(value);
+              if (item['isActive'] != false) {
+                item['_key'] = key;
+                loaded.add(item);
+              }
+            }
+          });
+        } else if (raw is List) {
+          for (int i = 0; i < raw.length; i++) {
+            final v = raw[i];
+            if (v is Map) {
+              final item = Map<String, dynamic>.from(v);
+              if (item['isActive'] != false) {
+                item['_key'] = i.toString();
+                loaded.add(item);
+              }
+            }
+          }
+        }
+      }
+
+      loaded.sort((a, b) {
+        final ta = (a['publishedAt'] ?? 0) as num;
+        final tb = (b['publishedAt'] ?? 0) as num;
+        return tb.toInt().compareTo(ta.toInt());
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _content = loaded;
+        _isLoading = false;
+        _hasInternet = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _hasInternet = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,28 +128,80 @@ class LearningScreen extends StatelessWidget {
           ),
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.search, color: Colors.black), onPressed: () {}),
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF3E0),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.local_fire_department, color: Colors.orange, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  "5 Day Streak",
-                  style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange[800]),
-                ),
-              ],
-            ),
-          )
+          IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.black),
+              onPressed: _loadContent),
         ],
       ),
-      body: SingleChildScrollView(
+      body: _buildBody(),
+      bottomNavigationBar: const PennyBottomNav(currentIndex: 3),
+    );
+  }
+
+  Widget _buildBody() {
+    // ❌ Internet nahi hai → red error
+    if (!_hasInternet) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEBEE),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.wifi_off,
+                    color: Color(0xFFC62828), size: 48),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "Can't load content",
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFFC62828),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Check your internet connection and try again.",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _initLoad,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadContent,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,195 +211,42 @@ class LearningScreen extends StatelessWidget {
               width: double.infinity,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
-                image: const DecorationImage(
-                  image: NetworkImage("https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"),
-                  fit: BoxFit.cover,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
                 ),
               ),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Colors.black.withValues(alpha: 0.8), Colors.transparent],
-                  ),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green[700],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        "NEXTGEN BUDGETBEE ACADEMY",
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Level Up Your Student Wealth",
+                    child: Text(
+                      "PENNYPAL ACADEMY",
                       style: GoogleFonts.poppins(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 8,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.lightbulb, color: Colors.green, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Daily Student Finance Tip",
-                      style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                Text("Today", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.green.shade100),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(12)),
-                        child: Text(
-                          "Read in 3 min",
-                          style: GoogleFonts.poppins(fontSize: 10, color: Colors.blue[800]),
-                        ),
-                      ),
-                      const Spacer(),
-                      const Icon(Icons.bookmark_border, color: Colors.grey),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "The 50/30/20 Rule for College Students: How to balance tuition, fun, and emergency savings without burning out.",
-                    style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold, height: 1.4),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Learn practical proportions tailored specifically for flexible college gig paychecks and shared...",
-                    style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("Quick Read • 150XP", style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey)),
-                      Text(
-                        "Read Tip →",
-                        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green[800]),
-                      ),
-                    ],
-                  )
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text("Explore Topics", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text("Swipe to filter", style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildTopicChip("All", true),
-                  _buildTopicChip("Budgeting Basics", false),
-                  _buildTopicChip("Smart Saving", false),
-                  _buildTopicChip("Credit", false),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.orange[100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.monetization_on, color: Colors.orange, size: 28),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              "CHALLENGE OF THE WEEK",
-                              style: GoogleFonts.poppins(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.orange[800]),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: Colors.brown, borderRadius: BorderRadius.circular(8)),
-                              child: Text(
-                                "+50 Honey Points!",
-                                style: GoogleFonts.poppins(fontSize: 8, color: Colors.white),
-                              ),
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text("Weekly Money Quiz", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
-                        Text(
-                          "Test your savvy on student credit cards",
-                          style: GoogleFonts.poppins(fontSize: 11, color: Colors.brown[700]),
-                        ),
-                      ],
+                    "Level Up Your Student Wealth",
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6D4C41),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: Text("Play Quiz", style: GoogleFonts.poppins(fontSize: 12, color: Colors.white)),
-                  )
                 ],
               ),
             ),
@@ -252,215 +254,316 @@ class LearningScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Featured Lessons", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text(
-                  "View Curriculum",
-                  style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green[800]),
-                ),
+                Text("Latest Lessons",
+                    style: GoogleFonts.poppins(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+                Text("${_content.length} available",
+                    style: GoogleFonts.poppins(
+                        fontSize: 12, color: Colors.grey)),
               ],
             ),
             const SizedBox(height: 12),
-            _buildLessonCard(
-              tag: "Beginner",
-              tagColor: Colors.blue[50]!,
-              tagTextColor: Colors.blue[800]!,
-              time: "4 min read",
-              title: "Budgeting 101: Zero-Based Budgeting",
-              subtitle: "Give every dollar a student job before the semester starts to eliminate month-end panic.",
-              isCompleted: true,
-              progress: 1.0,
-            ),
-            const SizedBox(height: 12),
-            _buildLessonCard(
-              tag: "Essential",
-              tagColor: const Color(0xFFFFEBEE),
-              tagTextColor: Colors.red[800]!,
-              time: "3 min read",
-              title: "Needs vs Wants: The Impulse Spending Checklist",
-              subtitle: "Master the 24-hour rule before making campus coffee runs and online checkout splurges.",
-              isCompleted: false,
-              isRecommended: true,
-              buttonText: "Start Lesson →",
-              honeyPoints: "+25 Honey Points",
-            ),
-            const SizedBox(height: 12),
-            _buildLessonCard(
-              tag: "Savings",
-              tagColor: Colors.green[50]!,
-              tagTextColor: Colors.green[800]!,
-              time: "5 min read",
-              title: "Building an Emergency Fund on a Student Income",
-              subtitle: "How micro-deposits of \$5 to \$15 weekly can protect your education from sudden textbook or car repair fees.",
-              isCompleted: false,
-              moduleInfo: "Module 3 of 6",
-            ),
-            const SizedBox(height: 12),
-            _buildLessonCard(
-              tag: "Intermediate",
-              tagColor: Colors.purple[50]!,
-              tagTextColor: Colors.purple[800]!,
-              time: "6 min read",
-              title: "Understanding Credit Scores Before You Graduate",
-              subtitle: "",
-              isCompleted: false,
-              isBookmarked: true,
-            ),
+            if (_content.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(40),
+                alignment: Alignment.center,
+                child: Column(
+                  children: [
+                    const Icon(Icons.menu_book_outlined,
+                        size: 48, color: Colors.grey),
+                    const SizedBox(height: 12),
+                    Text("No lessons yet",
+                        style: GoogleFonts.poppins(
+                            fontSize: 14, color: Colors.grey)),
+                    const SizedBox(height: 4),
+                    Text("Admin will publish content soon",
+                        style: GoogleFonts.poppins(
+                            fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+              )
+            else
+              ..._content.map((c) => _buildLessonCard(c)),
             const SizedBox(height: 80),
           ],
         ),
       ),
-      bottomNavigationBar: PennyBottomNav(currentIndex: 3),
     );
   }
 
-  Widget _buildTopicChip(String label, bool isSelected) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
+  Widget _buildLessonCard(Map<String, dynamic> c) {
+    final title = (c['title'] ?? 'Untitled').toString();
+    final desc = (c['description'] ?? '').toString();
+    final tag = (c['tag'] ?? 'General').toString();
+    final readTime = (c['readTime'] ?? '3 min read').toString();
+    final img = (c['coverImage'] ?? '').toString();
+    final content = (c['content'] ?? '').toString();
+    final publishedAt = c['publishedAt'] ?? 0;
+
+    Color tagBg = const Color(0xFFE8F5E9);
+    Color tagFg = const Color(0xFF2E7D32);
+    if (tag.toLowerCase().contains('beginner')) {
+      tagBg = const Color(0xFFE3F2FD);
+      tagFg = const Color(0xFF1565C0);
+    } else if (tag.toLowerCase().contains('essential')) {
+      tagBg = const Color(0xFFFFEBEE);
+      tagFg = const Color(0xFFC62828);
+    } else if (tag.toLowerCase().contains('intermediate')) {
+      tagBg = const Color(0xFFF3E5F5);
+      tagFg = const Color(0xFF6A1B9A);
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _LearningDetailScreen(
+              title: title,
+              content: content,
+              description: desc,
+              coverImage: img,
+              tag: tag,
+              readTime: readTime,
+              publishedAt: publishedAt,
+            ),
+          ),
+        );
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1B5E20) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? const Color(0xFF1B5E20) : Colors.grey.shade300),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
         ),
-        child: Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            color: isSelected ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLessonCard({
-    required String tag,
-    required Color tagColor,
-    required Color tagTextColor,
-    required String time,
-    required String title,
-    required String subtitle,
-    bool isCompleted = false,
-    bool isRecommended = false,
-    bool isBookmarked = false,
-    double progress = 0.0,
-    String? buttonText,
-    String? honeyPoints,
-    String? moduleInfo,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: tagColor, borderRadius: BorderRadius.circular(8)),
-                child: Text(
-                  tag,
-                  style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.bold, color: tagTextColor),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(Icons.access_time, size: 12, color: Colors.grey[500]),
-              const SizedBox(width: 4),
-              Text(time, style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey)),
-              const Spacer(),
-              if (isCompleted)
-                Row(
-                  children: [
-                    const Icon(Icons.check_circle, size: 14, color: Colors.green),
-                    const SizedBox(width: 4),
-                    Text(
-                      "Done",
-                      style: GoogleFonts.poppins(fontSize: 10, color: Colors.green[800], fontWeight: FontWeight.bold),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (img.isNotEmpty)
+              ClipRRect(
+                borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(16)),
+                child: CachedNetworkImage(
+                  imageUrl: img,
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    height: 160,
+                    color: Colors.grey[100],
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                  ],
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    height: 160,
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: Icon(Icons.broken_image,
+                          size: 40, color: Colors.grey),
+                    ),
+                  ),
                 ),
-              if (isRecommended)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(8)),
-                  child: Text("Recommended", style: GoogleFonts.poppins(fontSize: 10, color: Colors.blue[800])),
-                ),
-              if (isBookmarked) const Icon(Icons.bookmark, size: 18, color: Colors.grey),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.bold)),
-          if (subtitle.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600], height: 1.4)),
-          ],
-          if (isCompleted) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Text("Completed", style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey)),
-                const Spacer(),
-                Text("100%", style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey)),
-              ],
-            ),
-            const SizedBox(height: 4),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: Colors.grey[200],
-                color: const Color(0xFF00C853),
-                minHeight: 6,
               ),
-            ),
-          ],
-          if (!isCompleted) ...[
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (honeyPoints != null)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Row(
                     children: [
-                      const Icon(Icons.stars, size: 14, color: Colors.orange),
-                      const SizedBox(width: 4),
-                      Text(
-                        honeyPoints,
-                        style: GoogleFonts.poppins(fontSize: 10, color: Colors.orange[800], fontWeight: FontWeight.bold),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                            color: tagBg,
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Text(
+                          tag,
+                          style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: tagFg),
+                        ),
                       ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.access_time,
+                          size: 12, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(readTime,
+                          style: GoogleFonts.poppins(
+                              fontSize: 10, color: Colors.grey)),
                     ],
-                  )
-                else if (moduleInfo != null)
-                  Text(moduleInfo, style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey)),
-                if (buttonText != null)
-                  ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00C853),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    ),
-                    child: Text(
-                      buttonText,
-                      style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  )
-                else if (moduleInfo != null)
-                  Text(
-                    "Open →",
-                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green[800]),
                   ),
+                  const SizedBox(height: 12),
+                  Text(title,
+                      style: GoogleFonts.poppins(
+                          fontSize: 15, fontWeight: FontWeight.bold)),
+                  if (desc.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(desc,
+                        style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            height: 1.4),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(_formatDate(publishedAt),
+                          style: GoogleFonts.poppins(
+                              fontSize: 10, color: Colors.grey)),
+                      Text("Read →",
+                          style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green[800])),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(dynamic ts) {
+    if (ts == null) return '';
+    try {
+      final dt =
+      DateTime.fromMillisecondsSinceEpoch((ts as num).toInt());
+      final diff = DateTime.now().difference(dt);
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      return '${dt.day}/${dt.month}/${dt.year}';
+    } catch (_) {
+      return '';
+    }
+  }
+}
+
+// ============ DETAIL SCREEN ============
+class _LearningDetailScreen extends StatelessWidget {
+  final String title;
+  final String content;
+  final String description;
+  final String coverImage;
+  final String tag;
+  final String readTime;
+  final dynamic publishedAt;
+
+  const _LearningDetailScreen({
+    required this.title,
+    required this.content,
+    required this.description,
+    required this.coverImage,
+    required this.tag,
+    required this.readTime,
+    required this.publishedAt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text('Lesson',
+            style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: Colors.black,
+                fontWeight: FontWeight.bold)),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (coverImage.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: CachedNetworkImage(
+                  imageUrl: coverImage,
+                  height: 220,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    height: 220,
+                    color: Colors.grey[100],
+                    child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    height: 220,
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: Icon(Icons.broken_image,
+                          size: 60, color: Colors.grey),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 20),
+            Container(
+              padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Text(tag,
+                  style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF2E7D32))),
+            ),
+            const SizedBox(height: 12),
+            Text(title,
+                style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    height: 1.3)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.access_time, size: 14, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text(readTime,
+                    style: GoogleFonts.poppins(
+                        fontSize: 12, color: Colors.grey)),
               ],
-            )
-          ]
-        ],
+            ),
+            const SizedBox(height: 20),
+            if (description.isNotEmpty) ...[
+              Text(description,
+                  style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.grey[700],
+                      height: 1.5)),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 20),
+            ],
+            Text(
+              content.isNotEmpty ? content : 'Content coming soon...',
+              style: GoogleFonts.poppins(
+                  fontSize: 15, height: 1.7, color: Colors.black87),
+            ),
+            const SizedBox(height: 40),
+          ],
+        ),
       ),
     );
   }

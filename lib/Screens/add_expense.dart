@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
 import 'package:techwiz7/Models/expense.dart';
+import 'package:techwiz7/Services/PrefsService.dart';
 import 'app_colors.dart';
 
 class AddExpense extends StatefulWidget {
@@ -11,11 +12,10 @@ class AddExpense extends StatefulWidget {
 }
 
 class _AddExpense extends State<AddExpense> {
-  final _amountController = TextEditingController(text: '18.50');
-  final _descriptionController =
-  TextEditingController(text: 'Chipotle Burrito Bowl with friends');
+  final _amountController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
-  String _selectedCategory = 'Food';
+  String _selectedCategory = '';
   DateTime _selectedDate = DateTime.now();
 
   List<expense> _expenseList = [];
@@ -45,37 +45,53 @@ class _AddExpense extends State<AddExpense> {
     super.dispose();
   }
 
-  // ---------- FETCH ----------
   Future<void> _loadexpenses() async {
     setState(() => _isLoading = true);
 
-    final user = await DatabaseHelper().getuserid();
+    final userId = await PrefsService.instance.getUserId();
 
-    if (user == null) {
+    if (userId == null || userId.isEmpty) {
       if (!mounted) return;
+
       setState(() {
         _expenseList = [];
         _isLoading = false;
       });
+
       return;
     }
 
-    final expenses = await DatabaseHelper().getexpense(user.userId);
+    try {
+      debugPrint('Loading expenses for Firebase UID: $userId');
 
-    if (!mounted) return;
-    setState(() {
-      _expenseList = expenses;
-      _isLoading = false;
-    });
+      final expenses = await DatabaseHelper().getexpense(userId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _expenseList = expenses;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading expenses: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _expenseList = [];
+        _isLoading = false;
+      });
+    }
   }
 
-  // ---------- DELETE ----------
   Future<void> _deleteExpense(int id) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Expense?'),
-        content: const Text('Yeh expense permanently delete ho jayega.'),
+        content: const Text(
+          'Yeh expense permanently delete ho jayega.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -83,7 +99,10 @@ class _AddExpense extends State<AddExpense> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -91,74 +110,116 @@ class _AddExpense extends State<AddExpense> {
 
     if (confirm != true) return;
 
-    await DatabaseHelper().deleteexpense(id);
+    try {
+      await DatabaseHelper().deleteexpense(id);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Expense deleted')),
-    );
+      if (!mounted) return;
 
-    _loadexpenses();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Expense deleted'),
+        ),
+      );
+
+      await _loadexpenses();
+    } catch (e) {
+      debugPrint('Error deleting expense: $e');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete expense: $e'),
+        ),
+      );
+    }
   }
 
-  // ---------- Data ready karne ka function ----------
   Map<String, dynamic> _buildExpenseData() {
     return {
-      'amount': double.tryParse(_amountController.text.trim()) ?? 0.0,
+      'amount': double.tryParse(
+        _amountController.text.trim(),
+      ) ??
+          0.0,
       'category': _selectedCategory,
       'date': _selectedDate.toIso8601String(),
       'description': _descriptionController.text.trim(),
     };
   }
 
-  // ---------- SAVE ----------
   Future<void> _onSavePressed() async {
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final amount = double.tryParse(
+      _amountController.text.trim(),
+    ) ??
+        0.0;
 
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount')),
+        const SnackBar(
+          content: Text('Please enter a valid amount'),
+        ),
       );
       return;
     }
 
-    final user = await DatabaseHelper().getuserid();
-
-    if (user == null) {
-      if (!mounted) return;
+    // No category is selected by default now, so make sure one is picked.
+    if (_selectedCategory.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not logged in')),
+        const SnackBar(
+          content: Text('Please select a category'),
+        ),
       );
       return;
     }
+
+    final userId = await PrefsService.instance.getUserId();
+
+    if (userId == null || userId.isEmpty) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User not logged in'),
+        ),
+      );
+
+      return;
+    }
+
+    debugPrint('Saving expense for Firebase UID: $userId');
 
     final newExpense = expense(
       amount: amount,
       source: _selectedCategory,
       date: _selectedDate,
       description: _descriptionController.text.trim(),
-      userid: user.userId,
+      userid: userId,
       status: 'pending',
     );
 
     try {
-      // ✅ Ek hi call — SQLite insert + Firebase sync
       await DatabaseHelper().addexpenseAndSync(newExpense);
 
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Expense saved: ${newExpense.source} \$${newExpense.amount}',
+            'Expense saved: ${newExpense.source} \$${newExpense.amount.toStringAsFixed(2)}',
           ),
         ),
       );
-      Navigator.maybePop(context, true);
+
+      await _loadexpenses();
     } catch (e) {
       debugPrint('Error saving expense: $e');
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save: $e')),
+        SnackBar(
+          content: Text('Failed to save: $e'),
+        ),
       );
     }
   }
@@ -170,6 +231,7 @@ class _AddExpense extends State<AddExpense> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
+
     if (picked != null) {
       setState(() => _selectedDate = picked);
     }
@@ -177,9 +239,20 @@ class _AddExpense extends State<AddExpense> {
 
   String _formatDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
+
     return '${d.day} ${months[d.month - 1]}, ${d.year}';
   }
 
@@ -197,8 +270,11 @@ class _AddExpense extends State<AddExpense> {
               const SizedBox(height: 20),
               _amountBlock(),
               const SizedBox(height: 20),
-              _aiPill(),
-              const SizedBox(height: 22),
+              // AI pill only shows once a category is chosen.
+              if (_selectedCategory.isNotEmpty) ...[
+                _aiPill(),
+                const SizedBox(height: 22),
+              ],
               _categorySection(),
               const SizedBox(height: 22),
               _label('Date'),
@@ -208,8 +284,6 @@ class _AddExpense extends State<AddExpense> {
               _label('Description'),
               const SizedBox(height: 8),
               _descriptionField(),
-              const SizedBox(height: 18),
-              _limitCard(),
               const SizedBox(height: 20),
               _saveButton(),
               const SizedBox(height: 28),
@@ -221,7 +295,6 @@ class _AddExpense extends State<AddExpense> {
     );
   }
 
-  // ---------- EXPENSE LIST SECTION ----------
   Widget _expenseListSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +314,9 @@ class _AddExpense extends State<AddExpense> {
               const SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                ),
               ),
           ],
         ),
@@ -253,17 +328,24 @@ class _AddExpense extends State<AddExpense> {
             decoration: BoxDecoration(
               color: AppColors.card,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.track),
+              border: Border.all(
+                color: AppColors.track,
+              ),
             ),
             child: const Center(
               child: Text(
                 'No expenses yet',
-                style: TextStyle(fontSize: 13, color: AppColors.muted),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.muted,
+                ),
               ),
             ),
           )
         else
-          ..._expenseList.map((e) => _expenseTile(e)),
+          ..._expenseList.map(
+                (e) => _expenseTile(e),
+          ),
       ],
     );
   }
@@ -275,7 +357,9 @@ class _AddExpense extends State<AddExpense> {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.track),
+        border: Border.all(
+          color: AppColors.track,
+        ),
       ),
       child: Row(
         children: [
@@ -307,10 +391,15 @@ class _AddExpense extends State<AddExpense> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  e.description.isEmpty ? 'No description' : e.description,
+                  e.description.isEmpty
+                      ? 'No description'
+                      : e.description,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.muted,
+                  ),
                 ),
               ],
             ),
@@ -329,16 +418,24 @@ class _AddExpense extends State<AddExpense> {
               ),
               const SizedBox(height: 2),
               Text(
-    _formatDate(e.date),   // ✅ DateTime pass
-    style: const TextStyle(fontSize: 11, color: AppColors.muted),
-    ),
+                _formatDate(e.date),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.muted,
+                ),
+              ),
             ],
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline,
-                size: 20, color: AppColors.muted),
+            icon: const Icon(
+              Icons.delete_outline,
+              size: 20,
+              color: AppColors.muted,
+            ),
             onPressed: () {
-              if (e.id != null) _deleteExpense(e.id!);
+              if (e.id != null) {
+                _deleteExpense(e.id!);
+              }
             },
           ),
         ],
@@ -349,19 +446,25 @@ class _AddExpense extends State<AddExpense> {
   IconData _iconForCategory(String name) {
     final match = _categories.firstWhere(
           (c) => c['name'] == name,
-      orElse: () => {'name': 'Misc', 'icon': Icons.more_horiz},
+      orElse: () => {
+        'name': 'Misc',
+        'icon': Icons.more_horiz,
+      },
     );
+
     return match['icon'] as IconData;
   }
-
-  // ---------- UI WIDGETS ----------
 
   Widget _header() {
     return Row(
       children: [
         GestureDetector(
           onTap: () => Navigator.maybePop(context),
-          child: const Icon(Icons.arrow_back, size: 24, color: AppColors.ink),
+          child: const Icon(
+            Icons.arrow_back,
+            size: 24,
+            color: AppColors.ink,
+          ),
         ),
         const Expanded(
           child: Text(
@@ -376,7 +479,11 @@ class _AddExpense extends State<AddExpense> {
         ),
         GestureDetector(
           onTap: () => Navigator.maybePop(context),
-          child: const Icon(Icons.close, size: 24, color: AppColors.ink),
+          child: const Icon(
+            Icons.close,
+            size: 24,
+            color: AppColors.ink,
+          ),
         ),
       ],
     );
@@ -412,7 +519,9 @@ class _AddExpense extends State<AddExpense> {
               child: TextField(
                 controller: _amountController,
                 keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
+                const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 48,
@@ -422,6 +531,12 @@ class _AddExpense extends State<AddExpense> {
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   isCollapsed: true,
+                  hintText: '0.00',
+                  hintStyle: TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.muted,
+                  ),
                 ),
               ),
             ),
@@ -445,12 +560,19 @@ class _AddExpense extends State<AddExpense> {
   Widget _quickAdd(String text, double value) {
     return GestureDetector(
       onTap: () {
-        final current = double.tryParse(_amountController.text.trim()) ?? 0.0;
+        final current =
+            double.tryParse(_amountController.text.trim()) ?? 0.0;
+
         final updated = current + value;
-        _amountController.text = updated.toStringAsFixed(2);
+
+        _amountController.text =
+            updated.toStringAsFixed(2);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 8,
+        ),
         decoration: BoxDecoration(
           color: AppColors.blueSoft,
           borderRadius: BorderRadius.circular(20),
@@ -470,7 +592,10 @@ class _AddExpense extends State<AddExpense> {
   Widget _aiPill() {
     return Center(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
         decoration: BoxDecoration(
           color: AppColors.amberSoft,
           borderRadius: BorderRadius.circular(24),
@@ -478,11 +603,18 @@ class _AddExpense extends State<AddExpense> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome, size: 15, color: AppColors.amber),
+            const Icon(
+              Icons.auto_awesome,
+              size: 15,
+              color: AppColors.amber,
+            ),
             const SizedBox(width: 6),
             const Text(
               'AI Auto-Categorized: ',
-              style: TextStyle(fontSize: 13, color: AppColors.ink),
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.ink,
+              ),
             ),
             Text(
               '$_selectedCategory  ',
@@ -496,7 +628,9 @@ class _AddExpense extends State<AddExpense> {
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Tap a category below to change'),
+                    content: Text(
+                      'Tap a category below to change',
+                    ),
                   ),
                 );
               },
@@ -542,38 +676,67 @@ class _AddExpense extends State<AddExpense> {
           ],
         ),
         const SizedBox(height: 14),
-        Row(children: _buildCategoryRow(0, 4)),
+        Row(
+          children: _buildCategoryRow(0, 4),
+        ),
         const SizedBox(height: 12),
-        Row(children: _buildCategoryRow(4, 8)),
+        Row(
+          children: _buildCategoryRow(4, 8),
+        ),
       ],
     );
   }
 
   List<Widget> _buildCategoryRow(int start, int end) {
     final List<Widget> tiles = [];
+
     for (int i = start; i < end; i++) {
       final cat = _categories[i];
-      final isSelected = _selectedCategory == cat['name'];
+
+      final isSelected =
+          _selectedCategory == cat['name'];
+
       tiles.add(
-        _catTile(cat['icon'] as IconData, cat['name'] as String,
-            selected: isSelected),
+        _catTile(
+          cat['icon'] as IconData,
+          cat['name'] as String,
+          selected: isSelected,
+        ),
       );
-      if (i != end - 1) tiles.add(const SizedBox(width: 12));
+
+      if (i != end - 1) {
+        tiles.add(
+          const SizedBox(width: 12),
+        );
+      }
     }
+
     return tiles;
   }
 
-  Widget _catTile(IconData icon, String label, {bool selected = false}) {
+  Widget _catTile(
+      IconData icon,
+      String label, {
+        bool selected = false,
+      }) {
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedCategory = label),
+        onTap: () {
+          setState(() {
+            _selectedCategory = label;
+          });
+        },
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(
+            vertical: 14,
+          ),
           decoration: BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: selected ? AppColors.green : AppColors.track,
+              color: selected
+                  ? AppColors.green
+                  : AppColors.track,
               width: selected ? 1.8 : 1,
             ),
           ),
@@ -583,13 +746,17 @@ class _AddExpense extends State<AddExpense> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.greenSoft : AppColors.purpleSoft,
+                  color: selected
+                      ? AppColors.greenSoft
+                      : AppColors.purpleSoft,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   icon,
                   size: 20,
-                  color: selected ? AppColors.green : AppColors.ink,
+                  color: selected
+                      ? AppColors.green
+                      : AppColors.ink,
                 ),
               ),
               const SizedBox(height: 8),
@@ -598,7 +765,9 @@ class _AddExpense extends State<AddExpense> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: selected ? AppColors.green : AppColors.ink,
+                  color: selected
+                      ? AppColors.green
+                      : AppColors.ink,
                 ),
               ),
             ],
@@ -623,16 +792,24 @@ class _AddExpense extends State<AddExpense> {
     return GestureDetector(
       onTap: _pickDate,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 16,
+        ),
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.track),
+          border: Border.all(
+            color: AppColors.track,
+          ),
         ),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today_outlined,
-                size: 18, color: AppColors.green),
+            const Icon(
+              Icons.calendar_today_outlined,
+              size: 18,
+              color: AppColors.green,
+            ),
             const SizedBox(width: 12),
             Text(
               _formatDate(_selectedDate),
@@ -643,8 +820,11 @@ class _AddExpense extends State<AddExpense> {
               ),
             ),
             const Spacer(),
-            const Icon(Icons.keyboard_arrow_down,
-                size: 20, color: AppColors.muted),
+            const Icon(
+              Icons.keyboard_arrow_down,
+              size: 20,
+              color: AppColors.muted,
+            ),
           ],
         ),
       ),
@@ -653,83 +833,41 @@ class _AddExpense extends State<AddExpense> {
 
   Widget _descriptionField() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 16,
+      ),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.track),
+        border: Border.all(
+          color: AppColors.track,
+        ),
       ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _descriptionController,
-              style: const TextStyle(fontSize: 15, color: AppColors.ink),
+              style: const TextStyle(
+                fontSize: 15,
+                color: AppColors.ink,
+              ),
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 isCollapsed: true,
+                hintText: 'Add a note (optional)',
+                hintStyle: TextStyle(
+                  fontSize: 15,
+                  color: AppColors.muted,
+                ),
               ),
             ),
           ),
-          const Icon(Icons.edit_note, size: 20, color: AppColors.muted),
-        ],
-      ),
-    );
-  }
-
-  Widget _limitCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.track),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(
-              color: AppColors.greenSoft,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.verified_user_outlined,
-                color: AppColors.green, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'Within Food & Dining limit',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  '\$124.50 left of \$250.00 monthly cap',
-                  style: TextStyle(fontSize: 12, color: AppColors.muted),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 54,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: const LinearProgressIndicator(
-                value: 0.5,
-                minHeight: 8,
-                backgroundColor: AppColors.track,
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
-              ),
-            ),
+          const Icon(
+            Icons.edit_note,
+            size: 20,
+            color: AppColors.muted,
           ),
         ],
       ),
@@ -744,16 +882,24 @@ class _AddExpense extends State<AddExpense> {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.green,
           foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(
+            vertical: 16,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(28),
           ),
           elevation: 0,
         ),
-        icon: const Icon(Icons.check, size: 20),
+        icon: const Icon(
+          Icons.check,
+          size: 20,
+        ),
         label: const Text(
           'Save Expense',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
