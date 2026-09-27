@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
+import 'package:techwiz7/Screens/about_screen.dart';
 import 'package:techwiz7/Screens/add_income.dart';
 import 'package:techwiz7/Services/expense_sync_service.dart';
 import 'package:techwiz7/Services/income_sync_service.dart';
-
 import 'package:techwiz7/firebase_options.dart';
 import 'package:techwiz7/Authguard.dart';
 import 'package:techwiz7/Services/permisions_service.dart';
 import 'package:techwiz7/shared/app_colors.dart';
-
 import 'package:techwiz7/Screens/Spalsh.dart';
 import 'package:techwiz7/Screens/chose.dart';
 import 'package:techwiz7/Screens/Login.dart';
@@ -26,7 +25,6 @@ import 'package:techwiz7/Screens/learning_hub.dart';
 import 'package:techwiz7/Screens/ai_assistant.dart';
 import 'package:techwiz7/Screens/notification.dart';
 import 'package:techwiz7/Screens/Profile.dart';
-import 'package:techwiz7/Screens/Help.dart';
 import 'package:techwiz7/Screens/admin/admin_main.dart';
 
 void main() async {
@@ -78,7 +76,7 @@ class PennyPalApp extends StatelessWidget {
         '/ai': (context) => ChatScreen(),
         '/notification': (context) => NotificationsScreen(),
         '/profile': (context) => ProfileSettingsScreen(),
-        '/help': (context) => HelpSupportScreen(),
+        '/about': (context) => AboutScreen(),
         '/admin': (context) => AdminMain(),
         '/addincome':(context) => AddIncome()
       },
