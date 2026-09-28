@@ -3,6 +3,7 @@ import 'package:techwiz7/shared/penny_bottom_nav.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
 import 'package:techwiz7/Services/BudgetService.dart';
 import 'app_colors.dart';
+import 'package:techwiz7/Services/PrefsService.dart';
 
 // Budget Planner screen — now backed by BudgetService (SQLite + Firebase).
 class BudgetPlanner extends StatefulWidget {
@@ -57,8 +58,7 @@ class _BudgetPlanner extends State<BudgetPlanner> {
   Future<void> _load() async {
     setState(() => _loading = true);
 
-    final user = await _dbHelper.getuserid();
-    _userId = user?.userId;
+    _userId = await PrefsService.instance.getUserId();
 
     if (_userId != null) {
       // Recompute exceeded/active before displaying, in case expenses

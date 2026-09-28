@@ -2,28 +2,105 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:techwiz7/Services/PrefsService.dart';
 import 'package:techwiz7/shared/penny_bottom_nav.dart';
 import 'app_colors.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
+
   @override
-  State<NotificationsScreen> createState() => _NotificationsScreenState();
+  State<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen>
     with WidgetsBindingObserver {
   final DatabaseReference _db = FirebaseDatabase.instance.ref();
+  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+
   List<Map<String, dynamic>> _notifications = [];
   bool _isLoading = true;
-  int _lastCount = 0;
   bool _soundInitialized = false;
+  int _lastCount = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _requestPermission();
+    await _saveToken();
+    _listenRefresh();
+    _listenForegroundMessages();
     _listenNotifications();
+  }
+
+  Future<void> _requestPermission() async {
+    try {
+      await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+
+      await _messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    } catch (e) {
+      debugPrint('Permission error: $e');
+    }
+  }
+
+  Future<void> _saveToken() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      final token = await _messaging.getToken();
+      if (token == null || token.isEmpty) return;
+
+      await PrefsService.instance.saveToken(token);
+      await _db.child('users/$uid/fcmToken').set(token);
+      debugPrint('FCM token saved: $token');
+    } catch (e) {
+      debugPrint('Save FCM token error: $e');
+    }
+  }
+
+  void _listenRefresh() {
+    _messaging.onTokenRefresh.listen((newToken) async {
+      try {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid == null) return;
+        await PrefsService.instance.saveToken(newToken);
+        await _db.child('users/$uid/fcmToken').set(newToken);
+      } catch (e) {
+        debugPrint('Token refresh error: $e');
+      }
+    });
+  }
+
+  void _listenForegroundMessages() {
+    FirebaseMessaging.onMessage.listen((msg) {
+      debugPrint('Foreground message: ${msg.notification?.title}');
+      _playNotificationSound();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              msg.notification?.title ?? 'New notification'),
+          backgroundColor: const Color(0xFF2E7D32),
+        ),
+      );
+    });
   }
 
   @override
@@ -34,120 +111,132 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // App wapas foreground me aaye to sound check
     if (state == AppLifecycleState.resumed) {
-      // Fire listener phir se check karega
+      _saveToken();
     }
   }
 
   void _listenNotifications() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
-    _db.child('notifications/$uid').onValue.listen((event) {
-      final snap = event.snapshot;
-      final List<Map<String, dynamic>> loaded = [];
+    _db.child('notifications/$uid').onValue.listen(
+          (event) {
+        final snap = event.snapshot;
+        final loaded = <Map<String, dynamic>>[];
 
-      if (snap.exists && snap.value != null) {
-        final raw = snap.value;
-        if (raw is Map) {
-          final data = Map<String, dynamic>.from(raw);
-          data.forEach((key, value) {
-            if (value is Map) {
-              final item = Map<String, dynamic>.from(value);
-              item['_key'] = key;
-              loaded.add(item);
-            }
-          });
-        } else if (raw is List) {
-          for (int i = 0; i < raw.length; i++) {
-            final v = raw[i];
-            if (v is Map) {
-              final item = Map<String, dynamic>.from(v);
-              item['_key'] = i.toString();
-              loaded.add(item);
+        if (snap.exists && snap.value != null) {
+          final raw = snap.value;
+          if (raw is Map) {
+            raw.forEach((key, value) {
+              if (value is Map) {
+                final item = Map<String, dynamic>.from(value);
+                item['_key'] = key.toString();
+                loaded.add(item);
+              }
+            });
+          } else if (raw is List) {
+            for (int i = 0; i < raw.length; i++) {
+              final value = raw[i];
+              if (value is Map) {
+                final item = Map<String, dynamic>.from(value);
+                item['_key'] = i.toString();
+                loaded.add(item);
+              }
             }
           }
         }
-      }
 
-      loaded.sort((a, b) {
-        final pa = a['isPinned'] == true ? 1 : 0;
-        final pb = b['isPinned'] == true ? 1 : 0;
-        if (pa != pb) return pb.compareTo(pa);
-        final ta = (a['createdAt'] ?? 0) as num;
-        final tb = (b['createdAt'] ?? 0) as num;
-        return tb.toInt().compareTo(ta.toInt());
-      });
+        loaded.sort((a, b) {
+          final pa = a['isPinned'] == true ? 1 : 0;
+          final pb = b['isPinned'] == true ? 1 : 0;
+          if (pa != pb) return pb.compareTo(pa);
+          final ta = _ts(a['createdAt']);
+          final tb = _ts(b['createdAt']);
+          return tb.compareTo(ta);
+        });
 
-      // ✅ Naya notification aaya → sound bajao
-      // First load pe sound nahi bajana
-      if (_soundInitialized && loaded.length > _lastCount) {
-        _playNotificationSound();
-      }
-      _soundInitialized = true;
-      _lastCount = loaded.length;
+        if (_soundInitialized && loaded.length > _lastCount) {
+          _playNotificationSound();
+        }
+        _soundInitialized = true;
+        _lastCount = loaded.length;
 
-      if (!mounted) return;
-      setState(() {
-        _notifications = loaded;
-        _isLoading = false;
-      });
-    });
+        if (!mounted) return;
+        setState(() {
+          _notifications = loaded;
+          _isLoading = false;
+        });
+      },
+      onError: (error) {
+        debugPrint('Listener error: $error');
+        if (mounted) setState(() => _isLoading = false);
+      },
+    );
   }
 
-  // ✅ System sound — "tu tu tu tu tu" wala effect
+  int _ts(dynamic v) {
+    if (v is num) return v.toInt();
+    return 0;
+  }
+
   void _playNotificationSound() {
-    // Multiple beeps = notification jaisa sound
-    Future.delayed(Duration.zero, () {
-      SystemSound.play(SystemSoundType.alert);
-      HapticFeedback.heavyImpact();
-    });
-    Future.delayed(const Duration(milliseconds: 150), () {
+    SystemSound.play(SystemSoundType.alert);
+    HapticFeedback.heavyImpact();
+    Future.delayed(const Duration(milliseconds: 180), () {
       SystemSound.play(SystemSoundType.alert);
     });
-    Future.delayed(const Duration(milliseconds: 300), () {
+    Future.delayed(const Duration(milliseconds: 360), () {
       SystemSound.play(SystemSoundType.alert);
     });
   }
 
-  Future<void> _markAsRead(String key) async {
+  Future<void> _markRead(String key) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    await _db.child('notifications/$uid/$key').update({'isRead': true});
+    if (uid == null || key.isEmpty) return;
+    try {
+      await _db.child('notifications/$uid/$key').update({'isRead': true});
+    } catch (_) {}
   }
 
   Future<void> _togglePin(String key, bool current) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    await _db
-        .child('notifications/$uid/$key')
-        .update({'isPinned': !current});
+    if (uid == null || key.isEmpty) return;
+    try {
+      await _db
+          .child('notifications/$uid/$key')
+          .update({'isPinned': !current});
+    } catch (_) {}
   }
 
   Future<void> _clearAll() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final confirmed = await showDialog<bool>(
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Clear all notifications?'),
         content: const Text('This cannot be undone.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Clear')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear'),
+          ),
         ],
       ),
     );
-    if (confirmed == true) {
+    if (ok != true) return;
+    try {
       await _db.child('notifications/$uid').remove();
+    } catch (e) {
+      debugPrint('Clear error: $e');
     }
   }
 
@@ -159,28 +248,31 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         backgroundColor: AppColors.background,
         elevation: 0,
         leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.ink),
-            onPressed: () => Navigator.pop(context)),
+          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text(
           'Notifications',
           style: TextStyle(
-              color: AppColors.greenDark,
-              fontWeight: FontWeight.w800,
-              fontSize: 20),
+            color: AppColors.greenDark,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: _clearAll,
             child: const Text('Clear all',
                 style: TextStyle(
-                    color: AppColors.green, fontWeight: FontWeight.w700)),
+                    color: AppColors.green,
+                    fontWeight: FontWeight.w700)),
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-        onRefresh: () async => _listenNotifications(),
+        onRefresh: _saveToken,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding:
@@ -189,15 +281,15 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_notifications.isEmpty)
-                _buildEmptyState()
+                _emptyState()
               else ...[
-                _topSummary(),
+                _summary(),
                 const SizedBox(height: 20),
-                _dayHeader('ALL NOTIFICATIONS',
+                _header('ALL NOTIFICATIONS',
                     '${_notifications.length} total'),
                 const SizedBox(height: 10),
                 ..._notifications
-                    .map((n) => _buildNotificationCard(n)),
+                    .map((n) => _card(n)),
               ],
               const SizedBox(height: 20),
             ],
@@ -208,7 +300,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _emptyState() {
     return Padding(
       padding: const EdgeInsets.only(top: 100),
       child: Center(
@@ -239,7 +331,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     );
   }
 
-  Widget _topSummary() {
+  Widget _summary() {
     final unread =
         _notifications.where((n) => n['isRead'] != true).length;
     return Container(
@@ -292,7 +384,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     );
   }
 
-  Widget _dayHeader(String d, String right) {
+  Widget _header(String d, String right) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -303,24 +395,25 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 fontSize: 12,
                 letterSpacing: 1)),
         Text(right,
-            style: const TextStyle(
-                color: AppColors.muted, fontSize: 12)),
+            style:
+            const TextStyle(color: AppColors.muted, fontSize: 12)),
       ],
     );
   }
 
-  Widget _buildNotificationCard(Map<String, dynamic> n) {
+  Widget _card(Map<String, dynamic> n) {
     final title = (n['title'] ?? 'Notification').toString();
     final body = (n['body'] ?? '').toString();
     final type = (n['type'] ?? 'alert').toString();
     final isRead = n['isRead'] == true;
     final isPinned = n['isPinned'] == true;
     final createdAt = n['createdAt'] ?? 0;
-    final key = n['_key'] ?? '';
+    final key = (n['_key'] ?? '').toString();
 
     IconData icon = Icons.notifications;
     Color icoCol = AppColors.blue;
     Color icoBg = AppColors.blueSoft;
+
     if (type == 'learning') {
       icon = Icons.menu_book;
       icoCol = AppColors.green;
@@ -333,11 +426,16 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       icon = Icons.emoji_events;
       icoCol = AppColors.amber;
       icoBg = AppColors.amberSoft;
+    } else if (type == 'support') {
+      icon = Icons.support_agent;
+      icoCol = AppColors.blue;
+      icoBg = AppColors.blueSoft;
     }
 
     return GestureDetector(
       onTap: () async {
-        await _markAsRead(key);
+        await _markRead(key);
+        if (!mounted) return;
         if (type == 'learning') {
           Navigator.pushNamed(context, '/learning');
         }
@@ -413,7 +511,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             const SizedBox(height: 10),
             Row(
               children: [
-                Text(_formatDate(createdAt),
+                Text(_fmt(createdAt),
                     style: const TextStyle(
                         color: AppColors.muted, fontSize: 11)),
                 const Spacer(),
@@ -433,17 +531,17 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     );
   }
 
-  String _formatDate(dynamic ts) {
-    if (ts == null) return '';
+  String _fmt(dynamic ts) {
+    final v = _ts(ts);
+    if (v == 0) return '';
     try {
-      final dt =
-      DateTime.fromMillisecondsSinceEpoch((ts as num).toInt());
-      final diff = DateTime.now().difference(dt);
+      final d = DateTime.fromMillisecondsSinceEpoch(v);
+      final diff = DateTime.now().difference(d);
       if (diff.inMinutes < 1) return 'Just now';
       if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
       if (diff.inHours < 24) return '${diff.inHours}h ago';
       if (diff.inDays < 7) return '${diff.inDays}d ago';
-      return '${dt.day}/${dt.month}/${dt.year}';
+      return '${d.day}/${d.month}/${d.year}';
     } catch (_) {
       return '';
     }

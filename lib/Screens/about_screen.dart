@@ -205,20 +205,38 @@ class _AboutScreenState extends State<AboutScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
         title: const Text('About PennyPal',
             style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800)),
         centerTitle: true,
         actions: [
-          IconButton(
-              icon: const Icon(Icons.info_outline, color: AppColors.green),
-              onPressed: () {}),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_none, color: AppColors.ink),
+                  onPressed: () => Navigator.pushNamed(context, '/notification'),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.background, width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
-      ),
-      body: SingleChildScrollView(
+      ),      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
@@ -239,8 +257,7 @@ class _AboutScreenState extends State<AboutScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: PennyBottomNav(currentIndex: 4),
-    );
+      bottomNavigationBar: PennyBottomNav(currentIndex: 2),    );
   }
 
   // TAB 0: ABOUT ------------------------------------------------------

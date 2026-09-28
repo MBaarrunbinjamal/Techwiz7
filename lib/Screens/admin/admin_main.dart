@@ -26,19 +26,28 @@ class _AdminMainState extends State<AdminMain> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      DashboardScreen(onOpenNotifications: openNotifications, onOpenSettings: openSettings),
-      UserManagementScreen(onOpenNotifications: openNotifications, onOpenSettings: openSettings),
-      SupportContentScreen(onOpenNotifications: openNotifications, onOpenSettings: openSettings),
-      AnalyticsScreen(onOpenNotifications: openNotifications, onOpenSettings: openSettings),
+      DashboardScreen(
+        onOpenNotifications: openNotifications,
+        onOpenSettings: openSettings,
+      ),
+      UserManagementScreen(
+        onOpenNotifications: openNotifications,
+        onOpenSettings: openSettings,
+      ),
+      SupportContentScreen(
+        onOpenNotifications: openNotifications,
+        onOpenSettings: openSettings,
+      ),
+      AnalyticsScreen(
+        onOpenNotifications: openNotifications,
+        onOpenSettings: openSettings,
+      ),
     ];
 
     return Theme(
       data: isDark ? ThemeData.dark() : ThemeData.light(),
       child: Scaffold(
-        body: IndexedStack(
-          index: currentIndex,
-          children: screens,
-        ),
+        body: IndexedStack(index: currentIndex, children: screens),
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
@@ -61,13 +70,18 @@ class _AdminMainState extends State<AdminMain> {
             backgroundColor: Theme.of(context).cardColor,
             selectedItemColor: const Color(0xFF2E7D32),
             unselectedItemColor: Colors.grey,
-            selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+            selectedLabelStyle:
+            const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
             unselectedLabelStyle: const TextStyle(fontSize: 10),
             items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Dashboard'),
-              BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Students'),
-              BottomNavigationBarItem(icon: Icon(Icons.support_agent), label: 'Support'),
-              BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Analytics'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.home), label: 'Dashboard'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.people), label: 'Students'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.support_agent), label: 'Support'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.bar_chart), label: 'Analytics'),
             ],
           ),
         ),

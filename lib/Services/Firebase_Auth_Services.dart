@@ -2,6 +2,7 @@ import 'package:bcrypt/bcrypt.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
 import 'package:techwiz7/Services/PrefsService.dart';
 import '../Models/users.dart';
@@ -13,6 +14,33 @@ class AuthService {
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  Future<void> syncFcmToken([String? userId]) async {
+    try {
+      final uid = userId ?? _auth.currentUser?.uid;
+
+      if (uid == null || uid.isEmpty) {
+        print('FCM token sync skipped: No user UID found');
+        return;
+      }
+
+      final token = await FirebaseMessaging.instance.getToken();
+
+      if (token == null || token.isEmpty) {
+        print('FCM token sync skipped: No FCM token found');
+        return;
+      }
+
+      await PrefsService.instance.saveToken(token);
+
+      await FirebaseDatabase.instance
+          .ref('users/$uid/fcmToken')
+          .set(token);
+
+      print('FCM token synced successfully for $uid');
+    } catch (e) {
+      print('FCM token sync failed: $e');
+    }
+  }
 
   Future<UserCredential> signUp({
     required String email,
@@ -34,6 +62,8 @@ class AuthService {
         'Email': email,
         'Role': 'User',
       });
+
+      await syncFcmToken(userId);
 
       await userCredential.user!.sendEmailVerification();
 
@@ -78,17 +108,25 @@ class AuthService {
 
         if (uid != null) {
           await PrefsService.instance.saveUserId(uid);
+
+          await syncFcmToken(uid);
         }
 
         return true;
       } on FirebaseAuthException catch (e) {
         print('Firebase login failed: ${e.code}');
         return false;
+      } catch (e) {
+        print('Login failed: $e');
+        return false;
       }
     }
 
     // Offline login
-    final localUser = await DatabaseHelper().Loginuser(email, password);
+    final localUser = await DatabaseHelper().Loginuser(
+      email,
+      password,
+    );
 
     if (localUser != null) {
       final storedHash = localUser.password;
@@ -99,9 +137,15 @@ class AuthService {
       );
 
       if (isPasswordValid) {
-        await PrefsService.instance.saveUserId(
-          localUser.userId.toString(),
-        );
+        final uid = localUser.userId.toString();
+
+        await PrefsService.instance.saveUserId(uid);
+
+        try {
+          await syncFcmToken(uid);
+        } catch (e) {
+          print('FCM token could not be synced: $e');
+        }
 
         return true;
       }
@@ -112,6 +156,8 @@ class AuthService {
 
   Future<void> signOut() async {
     await _auth.signOut();
+    await PrefsService.instance.clearUserId();
+    await PrefsService.instance.clearToken();
   }
 
   Future<void> resetPassword(String email) async {
@@ -133,16 +179,17 @@ class AuthService {
   Future<void> deleteAccount() async {
     await _auth.currentUser?.delete();
   }
+
   Future<Map<String, dynamic>?> getUserProfile() async {
     final user = _auth.currentUser;
+
     if (user == null) return null;
 
     final snapshot =
     await FirebaseDatabase.instance.ref('users/${user.uid}').get();
 
     if (!snapshot.exists) return null;
+
     return Map<String, dynamic>.from(snapshot.value as Map);
   }
 }
-
-

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'shared_app_bar.dart';
 
-class AnalyticsScreen extends StatelessWidget {
+class AnalyticsScreen extends StatefulWidget {
   final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
 
@@ -12,6 +13,233 @@ class AnalyticsScreen extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+}
+
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  final DatabaseReference _db = FirebaseDatabase.instance.ref();
+
+  bool _isLoading = true;
+  int _totalStudents = 0;
+  int _activeUsers = 0;
+  double _totalIncome = 0;
+  double _totalExpense = 0;
+  int _totalIncomeEntries = 0;
+  int _totalExpenseEntries = 0;
+  int _totalGoals = 0;
+  int _totalBudgets = 0;
+  int _totalFeedback = 0;
+  int _totalSupport = 0;
+  int _totalLearning = 0;
+
+  Map<String, double> _expenseByCategory = {};
+  Map<String, double> _incomeBySource = {};
+
+  List<Map<String, dynamic>> _goalsList = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final usersSnap = await _db.child('users').get();
+      int activeCount = 0;
+      int totalCount = 0;
+      if (usersSnap.exists && usersSnap.value is Map) {
+        final users = Map<String, dynamic>.from(usersSnap.value as Map);
+        totalCount = users.length;
+        users.forEach((_, v) {
+          if (v is Map) {
+            final u = Map<String, dynamic>.from(v);
+            final isActive = u['isActive'];
+            final status = (u['status'] ?? '').toString().toLowerCase();
+            if (isActive == true ||
+                status == 'active' ||
+                (isActive == null && status.isEmpty)) {
+              activeCount++;
+            }
+          }
+        });
+      }
+
+      double income = 0;
+      int incomeCount = 0;
+      final incomeMap = <String, double>{};
+      try {
+        final snap = await _db.child('income').get();
+        if (snap.exists && snap.value != null) {
+          final raw = snap.value;
+          final list = <Map<String, dynamic>>[];
+          if (raw is List) {
+            for (final v in raw) {
+              if (v is Map) list.add(Map<String, dynamic>.from(v));
+            }
+          } else if (raw is Map) {
+            final d = Map<String, dynamic>.from(raw);
+            d.forEach((_, v) {
+              if (v is Map) list.add(Map<String, dynamic>.from(v));
+            });
+          }
+          for (final item in list) {
+            final amt = _parse(item['amount']);
+            income += amt;
+            incomeCount++;
+            final src = (item['source'] ?? 'Other').toString();
+            incomeMap[src] = (incomeMap[src] ?? 0) + amt;
+          }
+        }
+      } catch (_) {}
+
+      double expense = 0;
+      int expenseCount = 0;
+      final expenseMap = <String, double>{};
+      try {
+        final snap = await _db.child('expense').get();
+        if (snap.exists && snap.value != null) {
+          final raw = snap.value;
+          final list = <Map<String, dynamic>>[];
+          if (raw is List) {
+            for (final v in raw) {
+              if (v is Map) list.add(Map<String, dynamic>.from(v));
+            }
+          } else if (raw is Map) {
+            final d = Map<String, dynamic>.from(raw);
+            d.forEach((_, v) {
+              if (v is Map) list.add(Map<String, dynamic>.from(v));
+            });
+          }
+          for (final item in list) {
+            final amt = _parse(item['amount']);
+            expense += amt;
+            expenseCount++;
+            final cat = (item['source'] ??
+                item['category'] ??
+                'Miscellaneous')
+                .toString();
+            expenseMap[cat] = (expenseMap[cat] ?? 0) + amt;
+          }
+        }
+      } catch (_) {}
+
+      int goalsCount = 0;
+      final goalsList = <Map<String, dynamic>>[];
+      try {
+        final snap = await _db.child('goals').get();
+        if (snap.exists && snap.value != null) {
+          final raw = snap.value;
+          final list = <Map<String, dynamic>>[];
+          if (raw is List) {
+            for (final v in raw) {
+              if (v is Map) list.add(Map<String, dynamic>.from(v));
+            }
+          } else if (raw is Map) {
+            final d = Map<String, dynamic>.from(raw);
+            d.forEach((k, v) {
+              if (v is Map) {
+                final m = Map<String, dynamic>.from(v);
+                m['_key'] = k;
+                list.add(m);
+              }
+            });
+          }
+          goalsCount = list.length;
+          goalsList.addAll(list);
+        }
+      } catch (_) {}
+
+      int budgetsCount = 0;
+      try {
+        final snap = await _db.child('budgets').get();
+        if (snap.exists && snap.value != null) {
+          final raw = snap.value;
+          if (raw is List) {
+            budgetsCount = raw.length;
+          } else if (raw is Map) {
+            budgetsCount = (raw as Map).length;
+          }
+        }
+      } catch (_) {}
+
+      int feedbackCount = 0;
+      try {
+        final snap = await _db.child('feedback').get();
+        if (snap.exists && snap.value != null) {
+          final raw = snap.value;
+          if (raw is List) {
+            feedbackCount = raw.length;
+          } else if (raw is Map) {
+            feedbackCount = (raw as Map).length;
+          }
+        }
+      } catch (_) {}
+
+      int supportCount = 0;
+      try {
+        final snap = await _db.child('support').get();
+        if (snap.exists && snap.value != null) {
+          final raw = snap.value;
+          if (raw is List) {
+            supportCount = raw.length;
+          } else if (raw is Map) {
+            supportCount = (raw as Map).length;
+          }
+        }
+      } catch (_) {}
+
+      int learningCount = 0;
+      try {
+        final snap = await _db.child('learning').get();
+        if (snap.exists && snap.value != null) {
+          final raw = snap.value;
+          if (raw is List) {
+            learningCount = raw.length;
+          } else if (raw is Map) {
+            learningCount = (raw as Map).length;
+          }
+        }
+      } catch (_) {}
+
+      if (!mounted) return;
+      setState(() {
+        _totalStudents = totalCount;
+        _activeUsers = activeCount;
+        _totalIncome = income;
+        _totalExpense = expense;
+        _totalIncomeEntries = incomeCount;
+        _totalExpenseEntries = expenseCount;
+        _totalGoals = goalsCount;
+        _totalBudgets = budgetsCount;
+        _totalFeedback = feedbackCount;
+        _totalSupport = supportCount;
+        _totalLearning = learningCount;
+        _expenseByCategory = expenseMap;
+        _incomeBySource = incomeMap;
+        _goalsList = goalsList;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  double _parse(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
+  String _money(double v) {
+    if (v >= 1000000) return '\$${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000) return '\$${(v / 1000).toStringAsFixed(1)}K';
+    return '\$${v.toStringAsFixed(0)}';
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -19,83 +247,61 @@ class AnalyticsScreen extends StatelessWidget {
         title: 'Analytics & Reports',
         subtitle: 'Real-time aggregate metrics',
         showProfileIcon: true,
-        onOpenNotifications: onOpenNotifications,
-        onOpenSettings: onOpenSettings,
+        onOpenNotifications: widget.onOpenNotifications,
+        onOpenSettings: widget.onOpenSettings,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildFilterRow(context),
-            const SizedBox(height: 16),
-            _buildTelemetryCard(context),
-            const SizedBox(height: 16),
-            _buildCashflowCard(context),
-            const SizedBox(height: 16),
-            _buildSpendingCard(context),
-            const SizedBox(height: 16),
-            _buildHealthAlertsCard(context),
-            const SizedBox(height: 16),
-            _buildSavingsCard(context),
-            const SizedBox(height: 16),
-            _buildReportsCard(context),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterRow(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Flexible(child: Text('This Semester (Fall 2024)', style: TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
-                Icon(Icons.arrow_drop_down, size: 16),
-              ],
-            ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+        onRefresh: _loadStats,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTelemetryCard(context),
+              const SizedBox(height: 16),
+              _buildCashflowCard(context),
+              const SizedBox(height: 16),
+              _buildSpendingCard(context),
+              const SizedBox(height: 16),
+              _buildGoalsCard(context),
+              const SizedBox(height: 16),
+              _buildPlatformStatsCard(context),
+              const SizedBox(height: 16),
+              _buildReportsCard(context),
+              const SizedBox(height: 24),
+            ],
           ),
         ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(color: const Color(0xFF1B5E20), borderRadius: BorderRadius.circular(8)),
-          child: const Text('Active Cohort', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
-        ),
-      ],
+      ),
     );
   }
 
   Widget _buildTelemetryCard(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-      ),
+      decoration: _card(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('User Activity Telemetry', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const Text('User Activity',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(12)),
-                child: const Text('Live', style: TextStyle(fontSize: 10, color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(12)),
+                child: const Text('Live',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF2E7D32),
+                        fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -103,57 +309,37 @@ class AnalyticsScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildTelemetryMetric('DAU', '8,920', '+8.4%', const Color(0xFF2E7D32)),
-              _buildTelemetryMetric('Avg Session', '4m 12s', 'Normal', Colors.grey),
-              _buildTelemetryMetric('Adoption', '78%', 'Daily Loggers', Colors.grey),
+              _metric('Students', '$_totalStudents', 'registered'),
+              _metric('Active', '$_activeUsers', 'live'),
+              _metric(
+                  'Adoption',
+                  '${_totalStudents > 0 ? ((_activeUsers / _totalStudents) * 100).toStringAsFixed(0) : 0}%',
+                  'of total'),
             ],
-          ),
-          const SizedBox(height: 16),
-          const Text('Weekly DAU Velocity', style: TextStyle(fontSize: 10, color: Colors.grey)),
-          const SizedBox(height: 8),
-          Container(
-            height: 80,
-            decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(7, (index) {
-                return Container(
-                  width: 20,
-                  height: 20.0 + (index * 8),
-                  decoration: BoxDecoration(
-                    color: index == 4 ? const Color(0xFF2E7D32) : const Color(0xFFC8E6C9),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                  ),
-                );
-              }),
-            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTelemetryMetric(String label, String value, String sub, Color subColor) {
+  Widget _metric(String label, String value, String sub) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        Text(sub, style: TextStyle(fontSize: 10, color: subColor)),
+        Text(value,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(sub, style: const TextStyle(fontSize: 9, color: Colors.grey)),
       ],
     );
   }
 
   Widget _buildCashflowCard(BuildContext context) {
+    final net = _totalIncome - _totalExpense;
+    final ratio = _totalIncome > 0 ? (net / _totalIncome * 100) : 0;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-      ),
+      decoration: _card(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -161,15 +347,21 @@ class AnalyticsScreen extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.account_balance, size: 18, color: Color(0xFF2E7D32)),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.account_balance,
+                    size: 18, color: Color(0xFF2E7D32)),
               ),
               const SizedBox(width: 12),
               const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Campus Cashflow Overview', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                  Text('Aggregated', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  Text('Platform Cashflow',
+                      style:
+                      TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  Text('Aggregated',
+                      style: TextStyle(fontSize: 10, color: Colors.grey)),
                 ],
               ),
             ],
@@ -180,20 +372,34 @@ class AnalyticsScreen extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('Student Inflow', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                    Text('\$840,500', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
-                    Text('Grants, jobs & allowance', style: TextStyle(fontSize: 9, color: Colors.grey)),
+                  children: [
+                    const Text('Student Inflow',
+                        style: TextStyle(fontSize: 10, color: Colors.grey)),
+                    Text(_money(_totalIncome),
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2E7D32))),
+                    Text('$_totalIncomeEntries entries',
+                        style:
+                        const TextStyle(fontSize: 9, color: Colors.grey)),
                   ],
                 ),
               ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('Student Outflow', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                    Text('\$512,300', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFC62828))),
-                    Text('Campus & living costs', style: TextStyle(fontSize: 9, color: Colors.grey)),
+                  children: [
+                    const Text('Student Outflow',
+                        style: TextStyle(fontSize: 10, color: Colors.grey)),
+                    Text(_money(_totalExpense),
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFC62828))),
+                    Text('$_totalExpenseEntries entries',
+                        style:
+                        const TextStyle(fontSize: 9, color: Colors.grey)),
                   ],
                 ),
               ),
@@ -202,15 +408,24 @@ class AnalyticsScreen extends StatelessWidget {
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(8)),
             child: Row(
-              children: const [
-                Icon(Icons.trending_up, color: Color(0xFF2E7D32), size: 18),
-                SizedBox(width: 8),
-                Text('39.0%', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text('Healthy Buffer: Average campus-wide net savings rate', style: TextStyle(fontSize: 10, color: Color(0xFF2E7D32))),
+              children: [
+                const Icon(Icons.trending_up,
+                    color: Color(0xFF2E7D32), size: 18),
+                const SizedBox(width: 8),
+                Text('${ratio.toStringAsFixed(1)}%',
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32))),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Net savings rate across all users',
+                      style:
+                      TextStyle(fontSize: 10, color: Color(0xFF2E7D32))),
                 ),
               ],
             ),
@@ -221,162 +436,181 @@ class AnalyticsScreen extends StatelessWidget {
   }
 
   Widget _buildSpendingCard(BuildContext context) {
+    final sorted = _expenseByCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final total = _totalExpense;
+
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-      ),
+      decoration: _card(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('Category Spending Distribution', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            children: [
+              const Text('Category Spending',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('Total', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                  Text('\$512.3K', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  const Text('Total',
+                      style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  Text(_money(_totalExpense),
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold)),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _buildSpendingBar('Food & Dining', '\$184.4K', '36% of outflow', const Color(0xFF2E7D32)),
-          _buildSpendingBar('Education & Books', '\$122.9K', '24% of outflow', const Color(0xFF1565C0)),
-          _buildSpendingBar('Housing & Dorm', '\$92.2K', '18% of outflow', const Color(0xFF6A1B9A)),
-          _buildSpendingBar('Entertainment & Social', '\$71.7K', '14% of outflow', const Color(0xFFEF6C00)),
-          _buildSpendingBar('Transport', '\$41.1K', '8% of outflow', const Color(0xFFC62828)),
+          if (sorted.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Text('No expense data yet',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+              ),
+            )
+          else
+            ...sorted.take(8).map((e) {
+              final pct = total > 0 ? (e.value / total * 100) : 0;
+              return _bar(e.key, _money(e.value),
+                  '${pct.toStringAsFixed(0)}% of outflow', _color(e.key));
+            }),
         ],
       ),
     );
   }
 
-  Widget _buildSpendingBar(String label, String amount, String percent, Color color) {
+  Color _color(String key) {
+    const colors = [
+      Color(0xFF2E7D32),
+      Color(0xFF1565C0),
+      Color(0xFF6A1B9A),
+      Color(0xFFEF6C00),
+      Color(0xFFC62828),
+      Color(0xFF00838F),
+      Color(0xFF5D4037),
+      Color(0xFF455A64),
+    ];
+    return colors[key.hashCode.abs() % colors.length];
+  }
+
+  Widget _bar(String label, String amount, String percent, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+              Container(
+                  width: 8,
+                  height: 8,
+                  decoration:
+                  BoxDecoration(color: color, shape: BoxShape.circle)),
               const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              Text(amount, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              Expanded(
+                  child: Text(label,
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold))),
+              Text(amount,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 4),
           Padding(
-            padding: const EdgeInsets.only(left: 16.0),
-            child: Text(percent, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            padding: const EdgeInsets.only(left: 16),
+            child: Text(percent,
+                style: const TextStyle(fontSize: 10, color: Colors.grey)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHealthAlertsCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Budget Health & Alerts', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          Row(
-            children: const [
-              Expanded(
-                child: Column(
-                  children: [
-                    Text('Budgets in Control', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                    Text('81%', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
-                    Text('10,084 students on track', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  children: [
-                    Text('Alerts Triggered', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                    Text('1,420', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFC62828))),
-                    Text('Lead: Entertainment', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(8)),
-            child: Row(
-              children: const [
-                Icon(Icons.warning, color: Color(0xFFC62828), size: 18),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'High Alert Segment: First-year undergraduate cohorts accounted for 64% of overspending alerts during mid-term social weeks.',
-                    style: TextStyle(fontSize: 10, color: Color(0xFFC62828)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildGoalsCard(BuildContext context) {
+    int active = 0;
+    int completed = 0;
+    double totalSaved = 0;
+    double totalTarget = 0;
+    for (final g in _goalsList) {
+      final saved = _parse(g['saved']);
+      final target = _parse(g['target']);
+      final status = (g['status'] ?? 'active').toString().toLowerCase();
+      totalSaved += saved;
+      totalTarget += target;
+      if (status == 'completed' || (target > 0 && saved >= target)) {
+        completed++;
+      } else {
+        active++;
+      }
+    }
 
-  Widget _buildSavingsCard(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-      ),
+      decoration: _card(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Savings Milestones', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const Text('Savings Goals',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(12)),
-                child: const Text('Gamified', style: TextStyle(fontSize: 10, color: Color(0xFFEF6C00), fontWeight: FontWeight.bold)),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3E0),
+                    borderRadius: BorderRadius.circular(12)),
+                child: const Text('Gamified',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFFEF6C00),
+                        fontWeight: FontWeight.bold)),
               ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
-            children: const [
+            children: [
               Expanded(
                 child: Column(
                   children: [
-                    Text('3,840', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    Text('Goals Completed', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                    Text('Fall semester milestone completions', style: TextStyle(fontSize: 9, color: Colors.grey), textAlign: TextAlign.center),
+                    Text('$_totalGoals',
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                    const Text('Total Goals',
+                        style: TextStyle(fontSize: 10, color: Colors.grey)),
                   ],
                 ),
               ),
               Expanded(
                 child: Column(
                   children: [
-                    Text('4.2 mos', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    Text('Avg Completion', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                    Text('Speed increased by 14 days vs 2023', style: TextStyle(fontSize: 9, color: Colors.grey), textAlign: TextAlign.center),
+                    Text('$active',
+                        style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1565C0))),
+                    const Text('Active',
+                        style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text('$completed',
+                        style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2E7D32))),
+                    const Text('Completed',
+                        style: TextStyle(fontSize: 10, color: Colors.grey)),
                   ],
                 ),
               ),
@@ -385,20 +619,86 @@ class AnalyticsScreen extends StatelessWidget {
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFFF1F8E9), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+                color: const Color(0xFFF1F8E9),
+                borderRadius: BorderRadius.circular(8)),
             child: Row(
-              children: const [
-                Icon(Icons.emoji_events, color: Color(0xFFEF6C00), size: 18),
-                SizedBox(width: 8),
+              children: [
+                const Icon(Icons.emoji_events,
+                    color: Color(0xFFEF6C00), size: 18),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Emergency Fund Badges: 2,110 students reached \$500 target',
-                    style: TextStyle(fontSize: 10, color: Color(0xFF1B5E20)),
+                    'Total saved: ${_money(totalSaved)} of ${_money(totalTarget)} target',
+                    style: const TextStyle(
+                        fontSize: 10, color: Color(0xFF1B5E20)),
                   ),
                 ),
-                Text('+12.4%', style: TextStyle(fontSize: 10, color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlatformStatsCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _card(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Platform Activity',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                  child: _miniStat('Budgets', '$_totalBudgets',
+                      Icons.pie_chart, const Color(0xFF3B5BFF))),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _miniStat('Feedback', '$_totalFeedback',
+                      Icons.feedback, const Color(0xFFEF6C00))),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                  child: _miniStat('Support', '$_totalSupport',
+                      Icons.support_agent, const Color(0xFFC62828))),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: _miniStat('Learning', '$_totalLearning',
+                      Icons.menu_book, const Color(0xFF2E7D32))),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniStat(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
           ),
         ],
       ),
@@ -408,42 +708,55 @@ class AnalyticsScreen extends StatelessWidget {
   Widget _buildReportsCard(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-      ),
+      decoration: _card(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Reports & Audit Exports', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              const Text('Reports & Exports',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(12)),
-                child: const Text('Instant Access', style: TextStyle(fontSize: 10, color: Color(0xFF1565C0), fontWeight: FontWeight.bold)),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(12)),
+                child: const Text('Auto',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF1565C0),
+                        fontWeight: FontWeight.bold)),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _buildReportItem(Icons.description, 'Student Engagement Report', 'Comprehensive Fall 2024 (PDF 4.2 MB)'),
-          _buildReportItem(Icons.table_chart, 'Campus Spending Trends', 'Raw anonymized transactions (CSV, 1.8 MB)'),
-          _buildReportItem(Icons.shield, 'Compliance & Educational Log', 'Accreditation telemetry (PDF, 2.1 MB)'),
+          _reportRow(Icons.description, 'User Engagement Report',
+              '$_totalStudents users • $_totalTransactionsLabel()'),
+          _reportRow(Icons.table_chart, 'Transaction Summary',
+              '$_totalIncomeEntries income • $_totalExpenseEntries expense'),
+          _reportRow(Icons.emoji_events, 'Goals Progress',
+              '$_totalGoals goals tracked'),
         ],
       ),
     );
   }
 
-  Widget _buildReportItem(IconData icon, String title, String subtitle) {
+  String _totalTransactionsLabel() {
+    return '${_totalIncomeEntries + _totalExpenseEntries} txns';
+  }
+
+  Widget _reportRow(IconData icon, String title, String subtitle) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8)),
             child: Icon(icon, size: 18),
           ),
           const SizedBox(width: 12),
@@ -451,14 +764,25 @@ class AnalyticsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(subtitle,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey)),
               ],
             ),
           ),
           const Icon(Icons.download, color: Color(0xFF2E7D32), size: 20),
         ],
       ),
+    );
+  }
+
+  BoxDecoration _card(BuildContext context) {
+    return BoxDecoration(
+      color: Theme.of(context).cardColor,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
     );
   }
 }

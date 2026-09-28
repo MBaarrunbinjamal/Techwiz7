@@ -5,18 +5,20 @@ class PillButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool filled;
+  final VoidCallback? onTap;
 
   const PillButton({
     super.key,
     required this.label,
     required this.icon,
     required this.filled,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
-      onPressed: () {},
+      onPressed: onTap,
       icon: Icon(
         icon,
         size: 16,

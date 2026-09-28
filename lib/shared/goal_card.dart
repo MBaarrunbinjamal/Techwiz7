@@ -23,6 +23,7 @@ class GoalCard extends StatelessWidget {
   final String rightText;
   final Widget footerLeft;
   final Widget footerButton;
+  final bool showMilestones;
 
   const GoalCard({
     super.key,
@@ -46,6 +47,7 @@ class GoalCard extends StatelessWidget {
     required this.rightText,
     required this.footerLeft,
     required this.footerButton,
+    this.showMilestones = false,
   });
 
   @override
@@ -170,6 +172,10 @@ class GoalCard extends StatelessWidget {
             color: progressColor,
             trackColor: AppColors.track,
           ),
+          if (showMilestones) ...[
+            const SizedBox(height: 12),
+            _milestoneRow(),
+          ],
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -211,6 +217,46 @@ class GoalCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  // FR-37 milestone badges. Four marks at 25, 50, 75, and 100 percent.
+  // A mark fills in once progress passes it.
+  Widget _milestoneRow() {
+    const marks = [25, 50, 75, 100];
+    return Row(
+      children: marks.map((m) {
+        final reached = percent >= m;
+        return Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: reached ? const Color(0xFFDDF3E6) : AppColors.track,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  reached ? Icons.emoji_events : Icons.lock_outline,
+                  size: 12,
+                  color: reached ? AppColors.primaryDark : AppColors.textMuted,
+                ),
+                const SizedBox(width: 3),
+                Text(
+                  '$m%',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: reached ? AppColors.primaryDark : AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
