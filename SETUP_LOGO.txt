@@ -1,0 +1,22 @@
+LOGO SETUP - two steps to finish
+
+1. Place the assets folder at your project ROOT (same level as lib and pubspec.yaml).
+   The logo file must end up at:  assets/logo.png
+
+2. Open pubspec.yaml and add the asset under the flutter: section.
+   Match the exact indentation below (two spaces before flutter, four before assets):
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo.png
+
+If your pubspec already has a flutter: block, only add the assets: lines inside it.
+Then run:  flutter pub get
+
+Logo now shows on: Splash, Login, Choose, Register app bar, Email verification.
+Category and stat savings icons were left unchanged.
+
+Note: this changes the in-app logo only. The app launcher icon (home screen)
+lives in android/ and ios/, not in lib. To change that too, use the
+flutter_launcher_icons package with assets/logo.png as the source.
