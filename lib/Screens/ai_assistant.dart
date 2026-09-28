@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -22,18 +24,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final DatabaseReference _db = FirebaseDatabase.instance.ref();
 
-  // Chat sessions
   List<ChatSession> _sessions = [];
   String? _currentSessionId;
   bool _isLoadingSessions = true;
   bool _isLoadingMessages = false;
 
-  // Current chat messages
   final List<ChatMessage> _messages = [];
   bool _isSending = false;
 
-  // User context (Firebase se)
   Map<String, dynamic> _userContext = {};
+
+  String? _typingMessageId;
+  Timer? _typingTimer;
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _typingTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -52,7 +55,6 @@ class _ChatScreenState extends State<ChatScreen> {
     await _loadUserContext();
     await _loadSessions();
 
-    // Agar koi session hai to pehla load karo, warna naya banao
     if (_sessions.isNotEmpty) {
       await _loadSession(_sessions.first.id);
     } else {
@@ -62,13 +64,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
-  // ============== USER CONTEXT ==============
+  double _parseAmount(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    final cleaned = v.toString().replaceAll(RegExp(r'[^0-9.\-]'), '');
+    return double.tryParse(cleaned) ?? 0;
+  }
+
   Future<void> _loadUserContext() async {
     final uid = _uid;
     if (uid == null) return;
 
     try {
-      // Profile
       final profileSnap = await _db.child('users/$uid').get();
       String name = 'Student';
       if (profileSnap.exists && profileSnap.value is Map) {
@@ -79,75 +86,50 @@ class _ChatScreenState extends State<ChatScreen> {
         if (full.isNotEmpty) name = full;
       }
 
-      // Income — List + Map dono handle
       double totalIncome = 0;
-      int incomeCount = 0;
-      List<Map<String, dynamic>> recentIncome = [];
-
-      final incomeSnap = await _db.child('income').get();
-      if (incomeSnap.exists && incomeSnap.value != null) {
-        final raw = incomeSnap.value;
-        final List<Map<String, dynamic>> allIncome = [];
-
-        if (raw is List) {
-          for (final v in raw) {
-            if (v is Map) allIncome.add(Map<String, dynamic>.from(v));
-          }
-        } else if (raw is Map) {
-          final data = Map<String, dynamic>.from(raw);
-          data.forEach((_, v) {
-            if (v is Map) allIncome.add(Map<String, dynamic>.from(v));
-          });
-        }
-
-        for (final item in allIncome) {
-          if (item['userid'] == uid || item['userId'] == uid) {
-            totalIncome += _parseAmount(item['amount']);
-            incomeCount++;
-            recentIncome.add(item);
-          }
-        }
-      }
-
-      // Expense
       double totalExpense = 0;
+      int incomeCount = 0;
       int expenseCount = 0;
-      List<Map<String, dynamic>> recentExpense = [];
+      final recentIncome = <Map<String, dynamic>>[];
+      final recentExpense = <Map<String, dynamic>>[];
 
       try {
-        final expenseSnap = await _db.child('expense').get();
-        if (expenseSnap.exists && expenseSnap.value != null) {
-          final raw = expenseSnap.value;
-          final List<Map<String, dynamic>> allExpense = [];
+        final db = DatabaseHelper();
+        final txns = await db.getTransactions(uid);
 
-          if (raw is List) {
-            for (final v in raw) {
-              if (v is Map) allExpense.add(Map<String, dynamic>.from(v));
+        for (final t in txns) {
+          if (t.type == 'income') {
+            totalIncome += t.amount;
+            incomeCount++;
+            if (recentIncome.length < 5) {
+              recentIncome.add({
+                'source': t.source,
+                'amount': t.amount,
+                'date': t.date.toIso8601String(),
+              });
             }
-          } else if (raw is Map) {
-            final data = Map<String, dynamic>.from(raw);
-            data.forEach((_, v) {
-              if (v is Map) allExpense.add(Map<String, dynamic>.from(v));
-            });
-          }
-
-          for (final item in allExpense) {
-            if (item['userid'] == uid || item['userId'] == uid) {
-              totalExpense += _parseAmount(item['amount']);
-              expenseCount++;
-              recentExpense.add(item);
+          } else {
+            totalExpense += t.amount;
+            expenseCount++;
+            if (recentExpense.length < 5) {
+              recentExpense.add({
+                'source': t.source,
+                'amount': t.amount,
+                'date': t.date.toIso8601String(),
+              });
             }
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('SQLite read error: $e');
+      }
 
-      // Goals (agar user-specific nahi hain to skip karo safely)
-      List<String> goals = [];
+      final goals = <String>[];
       try {
         final goalsSnap = await _db.child('goals').get();
         if (goalsSnap.exists && goalsSnap.value != null) {
           final raw = goalsSnap.value;
-          final List<Map<String, dynamic>> allGoals = [];
+          final allGoals = <Map<String, dynamic>>[];
           if (raw is List) {
             for (final v in raw) {
               if (v is Map) allGoals.add(Map<String, dynamic>.from(v));
@@ -159,22 +141,18 @@ class _ChatScreenState extends State<ChatScreen> {
             });
           }
           for (final g in allGoals) {
-            final gUid = (g['userId'] ?? g['userid'] ?? '').toString();
+            final gUid =
+            (g['userId'] ?? g['userid'] ?? g['uid'] ?? '').toString();
             if (gUid == uid) {
               final title = (g['title'] ?? 'Goal').toString();
               final saved = _parseAmount(g['saved']);
               final target = _parseAmount(g['target']);
-              goals.add('$title: Rs $saved / Rs $target');
+              goals.add(
+                  '$title: \$${saved.toStringAsFixed(2)} / \$${target.toStringAsFixed(2)}');
             }
           }
         }
       } catch (_) {}
-
-      // Sort recent by date
-      recentIncome.sort((a, b) =>
-          (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()));
-      recentExpense.sort((a, b) =>
-          (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()));
 
       _userContext = {
         'name': name,
@@ -183,16 +161,8 @@ class _ChatScreenState extends State<ChatScreen> {
         'balance': totalIncome - totalExpense,
         'incomeCount': incomeCount,
         'expenseCount': expenseCount,
-        'recentIncome': recentIncome.take(5).map((e) => {
-          'source': (e['source'] ?? '').toString(),
-          'amount': _parseAmount(e['amount']),
-          'date': (e['date'] ?? '').toString(),
-        }).toList(),
-        'recentExpense': recentExpense.take(5).map((e) => {
-          'source': (e['source'] ?? e['category'] ?? '').toString(),
-          'amount': _parseAmount(e['amount']),
-          'date': (e['date'] ?? '').toString(),
-        }).toList(),
+        'recentIncome': recentIncome,
+        'recentExpense': recentExpense,
         'goals': goals,
       };
     } catch (e) {
@@ -200,13 +170,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  double _parseAmount(dynamic v) {
-    if (v == null) return 0;
-    if (v is num) return v.toDouble();
-    return double.tryParse(v.toString()) ?? 0;
-  }
-
-  // ============== CHAT SESSIONS ==============
   Future<void> _loadSessions() async {
     final uid = _uid;
     if (uid == null) {
@@ -216,7 +179,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final snap = await _db.child('users/$uid/chats').get();
-      final List<ChatSession> loaded = [];
+      final loaded = <ChatSession>[];
 
       if (snap.exists && snap.value != null) {
         final raw = snap.value;
@@ -269,7 +232,7 @@ class _ChatScreenState extends State<ChatScreen> {
       });
 
       if (!silent && mounted) {
-        Navigator.pop(context); // close drawer
+        Navigator.pop(context);
       }
 
       await _loadSessions();
@@ -283,20 +246,24 @@ class _ChatScreenState extends State<ChatScreen> {
     final uid = _uid;
     if (uid == null) return;
 
+    _typingTimer?.cancel();
+
     setState(() {
       _currentSessionId = sessionId;
       _messages.clear();
       _isLoadingMessages = true;
+      _typingMessageId = null;
     });
 
     try {
-      final snap = await _db.child('users/$uid/chats/$sessionId/messages').get();
+      final snap =
+      await _db.child('users/$uid/chats/$sessionId/messages').get();
 
-      final List<ChatMessage> loaded = [];
+      final loaded = <ChatMessage>[];
 
       if (snap.exists && snap.value != null) {
         final raw = snap.value;
-        final List<Map<String, dynamic>> all = [];
+        final all = <Map<String, dynamic>>[];
         if (raw is Map) {
           final data = Map<String, dynamic>.from(raw);
           data.forEach((key, value) {
@@ -330,6 +297,7 @@ class _ChatScreenState extends State<ChatScreen> {
             time: DateTime.fromMillisecondsSinceEpoch(
                 ((m['time'] ?? 0) as num).toInt()),
             isError: m['isError'] == true,
+            id: m['_key']?.toString(),
           ));
         }
       }
@@ -340,6 +308,7 @@ class _ChatScreenState extends State<ChatScreen> {
           "Hi! I'm your BudgetBee AI 🐝 Ask me anything about your budget, savings, or spending.",
           isUser: false,
           time: DateTime.now(),
+          id: 'welcome',
         ));
       }
 
@@ -451,7 +420,61 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============== SEND MESSAGE ==============
+  void _startTyping(String fullText) {
+    _typingTimer?.cancel();
+    _typingMessageId = DateTime.now().microsecondsSinceEpoch.toString();
+
+    setState(() {
+      _messages.add(ChatMessage(
+        text: '',
+        isUser: false,
+        time: DateTime.now(),
+        id: _typingMessageId!,
+      ));
+    });
+
+    int i = 0;
+    final chunkSize = fullText.length > 600 ? 4 : 3;
+
+    _typingTimer = Timer.periodic(const Duration(milliseconds: 18), (t) {
+      if (i >= fullText.length) {
+        t.cancel();
+        final finalMsg = ChatMessage(
+          text: fullText,
+          isUser: false,
+          time: DateTime.now(),
+          id: _typingMessageId!,
+        );
+        setState(() {
+          final idx =
+          _messages.indexWhere((m) => m.id == _typingMessageId);
+          if (idx != -1) _messages[idx] = finalMsg;
+          _typingMessageId = null;
+        });
+        _saveMessage(finalMsg);
+        _scrollToBottom();
+        return;
+      }
+
+      i += chunkSize;
+      if (i > fullText.length) i = fullText.length;
+
+      final partial = fullText.substring(0, i);
+      setState(() {
+        final idx = _messages.indexWhere((m) => m.id == _typingMessageId);
+        if (idx != -1) {
+          _messages[idx] = ChatMessage(
+            text: partial,
+            isUser: false,
+            time: _messages[idx].time,
+            id: _typingMessageId!,
+          );
+        }
+      });
+      _scrollToBottom();
+    });
+  }
+
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty || _isSending) return;
 
@@ -459,6 +482,7 @@ class _ChatScreenState extends State<ChatScreen> {
       text: text.trim(),
       isUser: true,
       time: DateTime.now(),
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
     );
 
     setState(() {
@@ -469,26 +493,24 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
     await _saveMessage(userMsg);
 
-    // Auto-name the session on first user message
     if (_messages.where((m) => m.isUser).length == 1 &&
         _currentSessionId != null) {
-      final autoName =
-      text.trim().length > 28 ? '${text.trim().substring(0, 28)}...' : text.trim();
+      final autoName = text.trim().length > 28
+          ? '${text.trim().substring(0, 28)}...'
+          : text.trim();
       _db
           .child('users/${_uid}/chats/$_currentSessionId')
           .update({'name': autoName}).then((_) => _loadSessions());
     }
 
     try {
-      // Refresh context every message (so AI gets latest data)
       await _loadUserContext();
 
-      // Build history (skip welcome msg + skip the just-added user msg)
       final history = _messages
-          .where((m) => !m.isError)
+          .where((m) => !m.isError && m.id != _typingMessageId)
           .skip(1)
-          .toList()
-          .sublist(0, (_messages.length - 2).clamp(0, _messages.length));
+          .toList();
+      if (history.isNotEmpty) history.removeLast();
 
       final historyPayload = history
           .map((m) => {
@@ -513,28 +535,24 @@ class _ChatScreenState extends State<ChatScreen> {
         final data = jsonDecode(response.body);
         final reply = data["reply"] ?? "Sorry, I couldn't respond.";
 
-        final aiMsg = ChatMessage(
-          text: reply,
-          isUser: false,
-          time: DateTime.now(),
-        );
-
         setState(() {
-          _messages.add(aiMsg);
           _isSending = false;
         });
-        await _saveMessage(aiMsg);
+
+        _startTyping(reply);
       } else {
         final errMsg = ChatMessage(
           text: "Oops! Server error (${response.statusCode}). Try again.",
           isUser: false,
           time: DateTime.now(),
           isError: true,
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
         );
         setState(() {
           _messages.add(errMsg);
           _isSending = false;
         });
+        _saveMessage(errMsg);
       }
     } catch (e) {
       final errMsg = ChatMessage(
@@ -542,11 +560,13 @@ class _ChatScreenState extends State<ChatScreen> {
         isUser: false,
         time: DateTime.now(),
         isError: true,
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
       );
       setState(() {
         _messages.add(errMsg);
         _isSending = false;
       });
+      _saveMessage(errMsg);
     }
     _scrollToBottom();
   }
@@ -563,10 +583,8 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // ============== FORMATTING (Markdown-ish) ==============
   List<InlineSpan> _formatText(String text) {
     final spans = <InlineSpan>[];
-    // Handle **bold** and normal
     final regex = RegExp(r'\*\*(.+?)\*\*');
     int lastIndex = 0;
 
@@ -594,7 +612,6 @@ class _ChatScreenState extends State<ChatScreen> {
     return spans;
   }
 
-  // ============== BUILD ==============
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -620,7 +637,9 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             Text(
-              _isSending ? "Typing..." : "Personalized student financial advice",
+              _isSending
+                  ? "Thinking..."
+                  : "Personalized student financial advice",
               style: GoogleFonts.poppins(
                 color: _isSending ? Colors.green[700] : Colors.grey[600],
                 fontSize: 11,
@@ -630,7 +649,8 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_comment_outlined, color: Colors.black),
+            icon: const Icon(Icons.add_comment_outlined,
+                color: Colors.black),
             tooltip: 'New Chat',
             onPressed: () => _createNewSession(),
           ),
@@ -651,7 +671,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   _buildSuggestedPrompts(),
                   const SizedBox(height: 16),
                 ],
-                ..._messages.map((m) => _buildMessageBubble(m)),
+                ..._messages.asMap().entries.map((entry) {
+                  return _AnimatedBubble(
+                    key: ValueKey(
+                        entry.value.id ?? entry.key.toString()),
+                    child: _buildMessageBubble(entry.value),
+                  );
+                }),
                 if (_isSending) _buildTypingIndicator(),
                 const SizedBox(height: 20),
               ],
@@ -663,14 +689,12 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============== DRAWER ==============
   Widget _buildDrawer() {
     return Drawer(
       backgroundColor: const Color(0xFFF5F7FA),
       child: SafeArea(
         child: Column(
           children: [
-            // Header
             Container(
               padding: const EdgeInsets.all(16),
               decoration: const BoxDecoration(
@@ -679,8 +703,10 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    child: const Icon(Icons.savings, color: Colors.white),
+                    backgroundColor:
+                    Colors.white.withValues(alpha: 0.2),
+                    child:
+                    const Icon(Icons.savings, color: Colors.white),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -708,8 +734,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
             ),
-
-            // New Chat button
             Padding(
               padding: const EdgeInsets.all(12),
               child: SizedBox(
@@ -729,10 +753,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ),
-
             const Divider(height: 1),
-
-            // Chat list
             Expanded(
               child: _isLoadingSessions
                   ? const Center(child: CircularProgressIndicator())
@@ -740,14 +761,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   ? Center(
                 child: Text(
                   'No chats yet',
-                  style: GoogleFonts.poppins(color: Colors.grey),
+                  style: GoogleFonts.poppins(
+                      color: Colors.grey),
                 ),
               )
                   : ListView.builder(
                 itemCount: _sessions.length,
                 itemBuilder: (context, i) {
                   final s = _sessions[i];
-                  final isActive = s.id == _currentSessionId;
+                  final isActive =
+                      s.id == _currentSessionId;
                   return Container(
                     margin: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 2),
@@ -755,7 +778,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: isActive
                           ? const Color(0xFFE8F5E9)
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius:
+                      BorderRadius.circular(10),
                     ),
                     child: ListTile(
                       dense: true,
@@ -777,8 +801,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               : FontWeight.w500,
                         ),
                       ),
-                      trailing: PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert, size: 18),
+                      trailing:
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert,
+                            size: 18),
                         onSelected: (val) {
                           if (val == 'rename') {
                             _showRenameDialog(s);
@@ -855,7 +881,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============== WELCOME / PROMPTS ==============
   Widget _buildWelcomeCard() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -927,9 +952,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildSuggestedPrompts() {
     final prompts = [
-      {"text": "What is my balance?", "icon": Icons.account_balance_wallet},
+      {
+        "text": "What is my balance?",
+        "icon": Icons.account_balance_wallet
+      },
       {"text": "How much did I spend?", "icon": Icons.receipt_long},
-      {"text": "Help me save Rs 500", "icon": Icons.savings},
+      {"text": "Help me save \$500", "icon": Icons.savings},
       {"text": "Meal prep tips?", "icon": Icons.lunch_dining},
     ];
 
@@ -981,7 +1009,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildPromptChip(String text, IconData icon) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding:
+      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -997,7 +1026,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============== MESSAGE BUBBLES ==============
   Widget _buildMessageBubble(ChatMessage msg) {
     if (msg.isUser) {
       return Padding(
@@ -1021,7 +1049,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 Text(
                   msg.text,
                   style: GoogleFonts.poppins(
-                      color: Colors.white, fontSize: 14, height: 1.4),
+                      color: Colors.white,
+                      fontSize: 14,
+                      height: 1.4),
                 ),
                 const SizedBox(height: 6),
                 Row(
@@ -1044,7 +1074,6 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
-    // AI bubble with formatting
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, right: 20),
       child: Row(
@@ -1061,11 +1090,14 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: msg.isError ? const Color(0xFFFFEBEE) : Colors.white,
+                color:
+                msg.isError ? const Color(0xFFFFEBEE) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border(
                   left: BorderSide(
-                    color: msg.isError ? Colors.red[400]! : Colors.green[600]!,
+                    color: msg.isError
+                        ? Colors.red[400]!
+                        : Colors.green[600]!,
                     width: 4,
                   ),
                   top: BorderSide(color: Colors.grey.shade200),
@@ -1076,16 +1108,19 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  RichText(
-                    text: TextSpan(
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: Colors.black87,
-                        height: 1.5,
+                  if (msg.text.isEmpty)
+                    _buildTypingDotsInline()
+                  else
+                    RichText(
+                      text: TextSpan(
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: Colors.black87,
+                          height: 1.5,
+                        ),
+                        children: _formatText(msg.text),
                       ),
-                      children: _formatText(msg.text),
                     ),
-                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -1117,6 +1152,19 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _buildTypingDotsInline() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _dot(0),
+        const SizedBox(width: 4),
+        _dot(150),
+        const SizedBox(width: 4),
+        _dot(300),
+      ],
+    );
+  }
+
   Widget _buildTypingIndicator() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, right: 20),
@@ -1131,7 +1179,8 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           const SizedBox(width: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -1174,7 +1223,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============== INPUT BAR ==============
   Widget _buildInputBar() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
@@ -1209,7 +1257,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         onSubmitted: _sendMessage,
                         decoration: InputDecoration(
                           hintText: "Ask BudgetBee anything...",
-                          hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                          hintStyle:
+                          GoogleFonts.poppins(color: Colors.grey),
                           border: InputBorder.none,
                         ),
                       ),
@@ -1220,10 +1269,13 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 12),
             GestureDetector(
-              onTap: _isSending ? null : () => _sendMessage(_controller.text),
+              onTap: _isSending
+                  ? null
+                  : () => _sendMessage(_controller.text),
               child: CircleAvatar(
-                backgroundColor:
-                _isSending ? Colors.grey[400] : const Color(0xFF00C853),
+                backgroundColor: _isSending
+                    ? Colors.grey[400]
+                    : const Color(0xFF00C853),
                 radius: 24,
                 child: _isSending
                     ? const SizedBox(
@@ -1234,7 +1286,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     strokeWidth: 2,
                   ),
                 )
-                    : const Icon(Icons.arrow_upward, color: Colors.white),
+                    : const Icon(Icons.arrow_upward,
+                    color: Colors.white),
               ),
             ),
           ],
@@ -1251,18 +1304,66 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-// ============= Models ==============
+class _AnimatedBubble extends StatefulWidget {
+  final Widget child;
+
+  const _AnimatedBubble({Key? key, required this.child})
+      : super(key: key);
+
+  @override
+  State<_AnimatedBubble> createState() => _AnimatedBubbleState();
+}
+
+class _AnimatedBubbleState extends State<_AnimatedBubble>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _fade;
+  late Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.15),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+        parent: _ctrl, curve: Curves.easeOutCubic));
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(position: _slide, child: widget.child),
+    );
+  }
+}
+
 class ChatMessage {
   final String text;
   final bool isUser;
   final DateTime time;
   final bool isError;
+  final String? id;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.time,
     this.isError = false,
+    this.id,
   });
 }
 
