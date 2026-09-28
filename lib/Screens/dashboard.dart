@@ -329,7 +329,9 @@ class _Dashboard extends State<Dashboard> {
             color: AppColors.greenSoft,
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.savings, color: AppColors.green, size: 22),
+          child: ClipOval(
+            child: Image.asset('assets/logo.png', fit: BoxFit.cover),
+          ),
         ),
         const SizedBox(width: 10),
         const Text(
@@ -405,28 +407,6 @@ class _Dashboard extends State<Dashboard> {
               const Text(
                 "Let's keep your budget thriving this week.",
                 style: TextStyle(fontSize: 14, color: AppColors.muted),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: AppColors.amberSoft,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.eco, size: 15, color: AppColors.amber),
-              SizedBox(width: 5),
-              Text(
-                'Bee Level 4',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.amber,
-                ),
               ),
             ],
           ),

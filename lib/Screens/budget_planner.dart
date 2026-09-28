@@ -304,8 +304,18 @@ class _BudgetPlanner extends State<BudgetPlanner> {
   Widget _topBar() {
     return Row(
       children: [
-        const Icon(Icons.savings, color: AppColors.green, size: 24),
-        const SizedBox(width: 8),
+        Container(
+          width: 40,
+          height: 40,
+          decoration: const BoxDecoration(
+            color: AppColors.greenSoft,
+            shape: BoxShape.circle,
+          ),
+          child: ClipOval(
+            child: Image.asset('assets/logo.png', fit: BoxFit.cover),
+          ),
+        ),
+        const SizedBox(width: 10),
         const Text(
           'PennyPal',
           style: TextStyle(

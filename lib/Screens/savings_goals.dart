@@ -147,12 +147,19 @@ class _SavingsGoalsState extends State<SavingsGoals> {
         backgroundColor: AppColors.background,
         elevation: 0,
         titleSpacing: 0,
-        leading: const Padding(
-          padding: EdgeInsets.only(left: 16),
-          child: Icon(
-            Icons.savings_outlined,
-            color: AppColors.primary,
-            size: 26,
+        leadingWidth: 68,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: AppColors.greenSoft,
+              shape: BoxShape.circle,
+            ),
+            child: ClipOval(
+              child: Image.asset('assets/logo.png', fit: BoxFit.cover),
+            ),
           ),
         ),
         title: const Column(
@@ -411,37 +418,8 @@ class _SavingsGoalsState extends State<SavingsGoals> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.amberBg,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.military_tech_rounded,
-                      size: 14,
-                      color: Color(0xFF9A5B10),
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      'LEVEL 3 SAVER',
-                      style: TextStyle(
-                        color: Color(0xFF9A5B10),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               const Row(
                 children: [
                   Icon(

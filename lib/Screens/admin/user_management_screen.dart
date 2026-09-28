@@ -6,10 +6,8 @@ import 'user_detail_screen.dart';
 class UserManagementScreen extends StatefulWidget {
   final VoidCallback onOpenSettings;
 
-  const UserManagementScreen({
-    Key? key,
-    required this.onOpenSettings,
-  }) : super(key: key);
+  const UserManagementScreen({Key? key, required this.onOpenSettings})
+    : super(key: key);
 
   @override
   State<UserManagementScreen> createState() => _UserManagementScreenState();
@@ -78,7 +76,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         if (statusField.isNotEmpty) {
           isActive = statusField.toLowerCase() == 'active';
           isPending = statusField.toLowerCase() == 'pending';
-          isFlagged = statusField.toLowerCase() == 'flagged' ||
+          isFlagged =
+              statusField.toLowerCase() == 'flagged' ||
               statusField.toLowerCase() == 'deactivated';
         } else if (isActiveField is bool) {
           isActive = isActiveField;
@@ -108,7 +107,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         });
       });
 
-      loaded.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+      loaded.sort(
+        (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+      );
 
       setState(() {
         _students = loaded;
@@ -158,7 +159,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(isActive ? 'Deactivate User?' : 'Activate User?'),
         content: Text(
-            'Are you sure you want to ${isActive ? 'deactivate' : 'activate'} ${student['name']}?'),
+          'Are you sure you want to ${isActive ? 'deactivate' : 'activate'} ${student['name']}?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -175,7 +177,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (confirmed != true) return;
 
     try {
-
       await _dbRef.child(userId).update({
         'isActive': !isActive,
         'status': isActive ? 'Deactivated' : 'Active',
@@ -185,17 +186,97 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                '${student['name']} ${isActive ? 'deactivated' : 'activated'}'),
+              '${student['name']} ${isActive ? 'deactivated' : 'activated'}',
+            ),
           ),
         );
       }
       _loadUsers();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update: $e')));
       }
+    }
+  }
+
+  Future<void> _deleteUser(Map<String, dynamic> student) async {
+    final userId = student['userId'] as String;
+    final name = student['name'];
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete User?'),
+        content: Text(
+          'This permanently removes $name and all their data. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Color(0xFFC62828)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final root = FirebaseDatabase.instance.ref();
+
+      // Flat nodes keyed by id, matched on the userid field inside each row.
+      await _deleteWhereUserId(root.child('income'), userId);
+      await _deleteWhereUserId(root.child('expense'), userId);
+      await _deleteWhereUserId(root.child('budgets'), userId);
+
+      // Nodes nested directly under the uid.
+      await root.child('goals').child(userId).remove();
+      await root.child('notifications').child(userId).remove();
+
+      // Remove the profile last.
+      await root.child('users').child(userId).remove();
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$name deleted')));
+      }
+      _loadUsers();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to delete: $e')));
+      }
+    }
+  }
+
+  Future<void> _deleteWhereUserId(DatabaseReference node, String userId) async {
+    final snapshot = await node.get();
+    if (!snapshot.exists || snapshot.value == null) return;
+    if (snapshot.value is! Map) return;
+
+    final data = Map<String, dynamic>.from(snapshot.value as Map);
+    final updates = <String, dynamic>{};
+
+    data.forEach((key, value) {
+      if (value is Map && (value['userid'] ?? '').toString() == userId) {
+        updates[key] = null; // null removes the child
+      }
+    });
+
+    if (updates.isNotEmpty) {
+      await node.update(updates);
     }
   }
 
@@ -227,27 +308,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           : _error != null
           ? _buildError()
           : RefreshIndicator(
-        onRefresh: _loadUsers,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSearchBar(),
-              const SizedBox(height: 16),
-              _buildFilterChips(),
-              const SizedBox(height: 16),
-              _buildResultsHeader(),
-              const SizedBox(height: 12),
-              if (filteredStudents.isEmpty)
-                _buildEmptyState()
-              else
-                ...filteredStudents.map((s) => _buildUserCard(s)),
-            ],
-          ),
-        ),
-      ),
+              onRefresh: _loadUsers,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSearchBar(),
+                    const SizedBox(height: 16),
+                    _buildFilterChips(),
+                    const SizedBox(height: 16),
+                    _buildResultsHeader(),
+                    const SizedBox(height: 12),
+                    if (filteredStudents.isEmpty)
+                      _buildEmptyState()
+                    else
+                      ...filteredStudents.map((s) => _buildUserCard(s)),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
@@ -312,18 +393,33 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         children: [
           _buildChip('All Status', 'All', true),
           const SizedBox(width: 8),
-          _buildChip('Active', 'Active', false,
-              const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
+          _buildChip(
+            'Active',
+            'Active',
+            false,
+            const Color(0xFFE8F5E9),
+            const Color(0xFF2E7D32),
+          ),
           const SizedBox(width: 8),
-          _buildChip('Pending', 'Pending', false,
-              const Color(0xFFFFF3E0), const Color(0xFFEF6C00)),
+          _buildChip(
+            'Pending',
+            'Pending',
+            false,
+            const Color(0xFFFFF3E0),
+            const Color(0xFFEF6C00),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildChip(String label, String value, bool isFirst,
-      [Color? bgColor, Color? textColor]) {
+  Widget _buildChip(
+    String label,
+    String value,
+    bool isFirst, [
+    Color? bgColor,
+    Color? textColor,
+  ]) {
     final isActive = selectedFilter == value;
     return GestureDetector(
       onTap: () => setState(() => selectedFilter = value),
@@ -335,9 +431,10 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               : (bgColor ?? Theme.of(context).cardColor),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-              color: isActive
-                  ? const Color(0xFF1B5E20)
-                  : Colors.grey.withValues(alpha: 0.3)),
+            color: isActive
+                ? const Color(0xFF1B5E20)
+                : Colors.grey.withValues(alpha: 0.3),
+          ),
         ),
         child: Text(
           label,
@@ -357,14 +454,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text('Showing ${filteredStudents.length} results',
-            style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(
+          'Showing ${filteredStudents.length} results',
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        ),
         Row(
           children: const [
-            Text('Sort by: ',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
-            Text('Name',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            Text(
+              'Sort by: ',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            Text(
+              'Name',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
             Icon(Icons.arrow_drop_down, size: 16),
           ],
         ),
@@ -405,9 +508,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: avatarBg,
-                    child: Text(student['initials'],
-                        style: TextStyle(
-                            color: avatarColor, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      student['initials'],
+                      style: TextStyle(
+                        color: avatarColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                   if (isActive)
                     Positioned(
@@ -420,7 +527,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           color: const Color(0xFF2E7D32),
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: Theme.of(context).cardColor, width: 2),
+                            color: Theme.of(context).cardColor,
+                            width: 2,
+                          ),
                         ),
                       ),
                     ),
@@ -434,21 +543,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(student['name'],
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold)),
+                          child: Text(
+                            student['name'],
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: isPending
                                 ? const Color(0xFFFFF3E0)
                                 : (isActive
-                                ? const Color(0xFFE8F5E9)
-                                : const Color(0xFFFFEBEE)),
+                                      ? const Color(0xFFE8F5E9)
+                                      : const Color(0xFFFFEBEE)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -458,27 +573,35 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               color: isPending
                                   ? const Color(0xFFEF6C00)
                                   : (isActive
-                                  ? const Color(0xFF2E7D32)
-                                  : const Color(0xFFC62828)),
+                                        ? const Color(0xFF2E7D32)
+                                        : const Color(0xFFC62828)),
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    Text(student['email'],
-                        style:
-                        const TextStyle(fontSize: 12, color: Colors.grey)),
+                    Text(
+                      student['email'],
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
                     Row(
                       children: [
-                        const Icon(Icons.badge_outlined,
-                            size: 12, color: Colors.grey),
+                        const Icon(
+                          Icons.badge_outlined,
+                          size: 12,
+                          color: Colors.grey,
+                        ),
                         const SizedBox(width: 4),
                         Flexible(
-                          child: Text(student['role'] ?? 'User',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 10, color: Colors.grey)),
+                          child: Text(
+                            student['role'] ?? 'User',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -493,8 +616,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                  color: const Color(0xFFFFEBEE),
-                  borderRadius: BorderRadius.circular(8)),
+                color: const Color(0xFFFFEBEE),
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Row(
                 children: const [
                   Icon(Icons.warning, color: Color(0xFFC62828), size: 16),
@@ -514,19 +638,24 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                  color: const Color(0xFFE3F2FD),
-                  borderRadius: BorderRadius.circular(8)),
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: const [
-                  Text('Account Pending Verification',
-                      style:
-                      TextStyle(fontSize: 10, color: Color(0xFF1565C0))),
-                  Text('Review',
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFF1565C0),
-                          fontWeight: FontWeight.bold)),
+                  Text(
+                    'Account Pending Verification',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF1565C0)),
+                  ),
+                  Text(
+                    'Review',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF1565C0),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -538,13 +667,16 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 child: ElevatedButton.icon(
                   onPressed: () => _openUserDetails(student),
                   icon: const Icon(Icons.visibility, size: 16),
-                  label: const Text('View Details',
-                      style: TextStyle(fontSize: 12)),
+                  label: const Text(
+                    'View Details',
+                    style: TextStyle(fontSize: 12),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1B5E20),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
@@ -552,21 +684,43 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _toggleUserStatus(student),
-                  icon: Icon(isActive ? Icons.block : Icons.check_circle,
-                      size: 16),
-                  label: Text(isActive ? 'Deactivate' : 'Activate',
-                      style: const TextStyle(fontSize: 12)),
+                  icon: Icon(
+                    isActive ? Icons.block : Icons.check_circle,
+                    size: 16,
+                  ),
+                  label: Text(
+                    isActive ? 'Deactivate' : 'Activate',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: isActive
                         ? const Color(0xFFC62828)
                         : const Color(0xFF2E7D32),
                     side: BorderSide(
-                        color: isActive
-                            ? const Color(0xFFFFCDD2)
-                            : const Color(0xFFC8E6C9)),
+                      color: isActive
+                          ? const Color(0xFFFFCDD2)
+                          : const Color(0xFFC8E6C9),
+                    ),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 44,
+                child: OutlinedButton(
+                  onPressed: () => _deleteUser(student),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFC62828),
+                    side: const BorderSide(color: Color(0xFFFFCDD2)),
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Icon(Icons.delete_outline, size: 18),
                 ),
               ),
             ],

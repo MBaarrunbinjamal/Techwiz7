@@ -465,10 +465,13 @@ class _TransactionHistory extends State<TransactionHistory> {
   Widget _topBar() {
     return Row(
       children: [
-        const Icon(
-          Icons.savings,
-          color: AppColors.green,
-          size: 24,
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.asset('assets/logo.png', fit: BoxFit.cover),
+          ),
         ),
         const SizedBox(width: 8),
         const Text(
@@ -532,36 +535,6 @@ class _TransactionHistory extends State<TransactionHistory> {
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.muted,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.amberSoft,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.emoji_events,
-                size: 15,
-                color: AppColors.amber,
-              ),
-              SizedBox(width: 5),
-              Text(
-                'Level 4 Saver',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.amber,
                 ),
               ),
             ],

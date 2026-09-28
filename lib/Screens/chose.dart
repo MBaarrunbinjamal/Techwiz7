@@ -73,53 +73,14 @@ class _choseState extends State<chose> {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.savings_rounded,
-                size: 54,
-                color: Colors.white,
-              ),
-            ),
-            Positioned(
-              top: -8,
-              right: -10,
-              child: Container(
-                width: 34,
-                height: 34,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.background, width: 3),
-                ),
-                child: const Text('🐝', style: TextStyle(fontSize: 16)),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: Image.asset('assets/logo.png', fit: BoxFit.cover),
               ),
             ),
           ],
         ),
         const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: _peachColor,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.auto_awesome, size: 16, color: AppColors.title),
-              SizedBox(width: 6),
-              Text(
-                'NextGen BudgetBee',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.title,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
         const Text(
           'PennyPal',
           style: TextStyle(

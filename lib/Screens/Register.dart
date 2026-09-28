@@ -121,8 +121,6 @@ class _RegisterState extends State<Register> {
                   _createButton(),
                   const SizedBox(height: 28),
                   _loginLink(),
-                  const SizedBox(height: 24),
-                  _grantCard(),
                 ],
               ),
             ),
@@ -153,23 +151,19 @@ class _RegisterState extends State<Register> {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
+          SizedBox(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(color: AppColors.primaryDark, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.savings_outlined, color: Colors.white, size: 20),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset('assets/logo.png', fit: BoxFit.cover),
+            ),
           ),
           const SizedBox(width: 8),
           const Text('PennyPal', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.primaryDark)),
         ],
       ),
       actions: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: _peachColor, borderRadius: BorderRadius.circular(20)),
-          child: const Text('BETA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.title)),
-        ),
-        const SizedBox(width: 16),
       ],
       bottom: const PreferredSize(
         preferredSize: Size.fromHeight(1),
@@ -177,7 +171,6 @@ class _RegisterState extends State<Register> {
       ),
     );
   }
-
   Widget _heading() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,33 +352,6 @@ class _RegisterState extends State<Register> {
     );
   }
 
-  Widget _grantCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 4))],
-      ),
-      child: const Row(
-        children: [
-          CircleAvatar(radius: 28, backgroundColor: _peachColor, child: Icon(Icons.workspace_premium_outlined, size: 26, color: _brownColor)),
-          SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Earn Rs 1,000 Student Welcome Grant', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.title)),
-                SizedBox(height: 4),
-                Text('Complete onboarding to unlock your first automatic savings deposit.', style: TextStyle(fontSize: 13.5, height: 1.35, color: AppColors.body)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _StrengthBar extends StatelessWidget {

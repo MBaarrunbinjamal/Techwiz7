@@ -236,10 +236,9 @@ class _LoginState extends State<Login> {
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.savings,
-                  color: AppColors.green,
-                  size: 34,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset('assets/logo.png', fit: BoxFit.cover),
                 ),
               ),
               Positioned(
@@ -282,7 +281,6 @@ class _LoginState extends State<Login> {
       ],
     );
   }
-
   Widget _loginCard() {
     return Container(
       decoration: BoxDecoration(
