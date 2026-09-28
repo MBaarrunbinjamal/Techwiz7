@@ -35,8 +35,8 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await Supabase.initialize(
-    url: 'https://rxuxpdeuancbjupzehse.supabase.co',
-    anonKey: 'sb_publishable__QzP_6XKXzcG9Euteo4-xA_EneQZFF9',
+    url: 'https://sxabmcpppmescurgleyl.supabase.co',
+    publishableKey: 'sb_publishable_hj-oEKD2FA6PHQK0Dem-yw_1s4d0SrC',
   );
 
   permisions().getnotificationpermision();
