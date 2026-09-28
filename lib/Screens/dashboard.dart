@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
 import 'package:techwiz7/Models/TransactionModel.dart';
@@ -37,11 +39,158 @@ class _Dashboard extends State<Dashboard> {
 
   List<TransactionModel> recentTxns = [];
 
+  StreamSubscription? _incomeSub;
+  StreamSubscription? _expenseSub;
+  StreamSubscription? _goalsSub;
+  StreamSubscription? _budgetsSub;
+
   @override
   void initState() {
     super.initState();
     getusername();
     loadDashboard();
+    _listenToFirebase();
+  }
+
+  @override
+  void dispose() {
+    _incomeSub?.cancel();
+    _expenseSub?.cancel();
+    _goalsSub?.cancel();
+    _budgetsSub?.cancel();
+    super.dispose();
+  }
+
+  void _listenToFirebase() {
+    final db = FirebaseDatabase.instance.ref();
+
+    _incomeSub = db.child('income').onValue.listen((event) {
+      _refreshFromFirebase();
+    });
+
+    _expenseSub = db.child('expense').onValue.listen((event) {
+      _refreshFromFirebase();
+    });
+
+    _goalsSub = db.child('goals').onValue.listen((event) {
+      _refreshFromFirebase();
+    });
+
+    _budgetsSub = db.child('budgets').onValue.listen((event) {
+      _refreshFromFirebase();
+    });
+  }
+
+  Future<void> _refreshFromFirebase() async {
+    final uid = await PrefsService.instance.getUserId();
+    if (uid == null || uid.isEmpty) return;
+
+    try {
+      await _syncFirebaseToLocal(uid);
+      await loadDashboard();
+    } catch (e) {
+      debugPrint('Auto refresh error: $e');
+    }
+  }
+
+  Future<void> _syncFirebaseToLocal(String uid) async {
+    try {
+      final db = DatabaseHelper();
+      final fdb = FirebaseDatabase.instance.ref();
+
+      final incomeSnap = await fdb.child('income').get();
+      final expenseSnap = await fdb.child('expense').get();
+
+      final incomeList = <Map<String, dynamic>>[];
+      if (incomeSnap.exists && incomeSnap.value != null) {
+        final raw = incomeSnap.value;
+        if (raw is List) {
+          for (final v in raw) {
+            if (v is Map) incomeList.add(Map<String, dynamic>.from(v));
+          }
+        } else if (raw is Map) {
+          final d = Map<String, dynamic>.from(raw);
+          d.forEach((k, v) {
+            if (v is Map) {
+              final m = Map<String, dynamic>.from(v);
+              m['_key'] = k;
+              incomeList.add(m);
+            }
+          });
+        }
+      }
+
+      final expenseList = <Map<String, dynamic>>[];
+      if (expenseSnap.exists && expenseSnap.value != null) {
+        final raw = expenseSnap.value;
+        if (raw is List) {
+          for (final v in raw) {
+            if (v is Map) expenseList.add(Map<String, dynamic>.from(v));
+          }
+        } else if (raw is Map) {
+          final d = Map<String, dynamic>.from(raw);
+          d.forEach((k, v) {
+            if (v is Map) {
+              final m = Map<String, dynamic>.from(v);
+              m['_key'] = k;
+              expenseList.add(m);
+            }
+          });
+        }
+      }
+
+      for (final item in incomeList) {
+        final itemUid =
+        (item['userid'] ?? item['userId'] ?? '').toString();
+        if (itemUid != uid) continue;
+
+        final txn = TransactionModel(
+          userId: uid,
+          type: 'income',
+          amount: _parseAmount(item['amount']),
+          source: (item['source'] ?? 'Income').toString(),
+          description:
+          (item['description'] ?? item['descript'] ?? '').toString(),
+          date: _parseDate(item['date']),
+        );
+        await db.insertTransactionIfNotExists(txn);
+      }
+
+      for (final item in expenseList) {
+        final itemUid =
+        (item['userid'] ?? item['userId'] ?? '').toString();
+        if (itemUid != uid) continue;
+
+        final txn = TransactionModel(
+          userId: uid,
+          type: 'expense',
+          amount: _parseAmount(item['amount']),
+          source: (item['source'] ?? item['category'] ?? 'Expense')
+              .toString(),
+          description:
+          (item['description'] ?? item['descript'] ?? '').toString(),
+          date: _parseDate(item['date']),
+        );
+        await db.insertTransactionIfNotExists(txn);
+      }
+    } catch (e) {
+      debugPrint('Sync error: $e');
+    }
+  }
+
+  double _parseAmount(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    final cleaned = v.toString().replaceAll(RegExp(r'[^0-9.\-]'), '');
+    return double.tryParse(cleaned) ?? 0;
+  }
+
+  DateTime _parseDate(dynamic v) {
+    if (v == null) return DateTime.now();
+    try {
+      if (v is String && v.isNotEmpty) return DateTime.parse(v);
+    } catch (_) {}
+    return DateTime.now();
   }
 
   Future<void> loadDashboard() async {
@@ -192,7 +341,6 @@ class _Dashboard extends State<Dashboard> {
           ),
         ),
         const Spacer(),
-
         GestureDetector(
           onTap: _openProfile,
           child: Container(
@@ -208,9 +356,7 @@ class _Dashboard extends State<Dashboard> {
             ),
           ),
         ),
-
         const SizedBox(width: 12),
-
         Stack(
           clipBehavior: Clip.none,
           children: [
@@ -418,7 +564,8 @@ class _Dashboard extends State<Dashboard> {
               Container(
                 width: 30,
                 height: 30,
-                decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+                decoration:
+                BoxDecoration(color: iconBg, shape: BoxShape.circle),
                 child: Icon(icon, size: 17, color: iconColor),
               ),
             ],

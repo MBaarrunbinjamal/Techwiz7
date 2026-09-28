@@ -119,7 +119,7 @@ class _LoginState extends State<Login> {
     final email = emailController.text.trim();
 
     if (email.isEmpty) {
-      _showMessage('Enter your email above, then tap Forgot Password');
+      _showMessage('Type your email in the field above, then tap Forgot Password');
       return;
     }
     if (!_isValidEmail(email)) {
@@ -127,12 +127,32 @@ class _LoginState extends State<Login> {
       return;
     }
 
+    setState(() => _isLoading = true);
     try {
       await _auth.resetPassword(email);
       if (!mounted) return;
       _showMessage('Password reset link sent to $email');
     } on FirebaseAuthException catch (e) {
-      _showMessage(_authMessage(e.code));
+      _showMessage(_resetMessage(e.code));
+    } catch (_) {
+      _showMessage('Something went wrong. Try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _resetMessage(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'No account found with this email';
+      case 'invalid-email':
+        return 'Enter a valid email address';
+      case 'too-many-requests':
+        return 'Too many attempts. Try again later';
+      case 'network-request-failed':
+        return 'No internet connection. Check your network';
+      default:
+        return 'Could not send reset email. Try again.';
     }
   }
 
@@ -395,27 +415,27 @@ class _LoginState extends State<Login> {
         ),
         child: _isLoading
             ? const SizedBox(
-                height: 22,
-                width: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: Colors.white,
-                ),
-              )
+          height: 22,
+          width: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: Colors.white,
+          ),
+        )
             : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Log In',
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  Icon(Icons.arrow_forward_rounded, size: 18),
-                ],
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Log In',
+              style: TextStyle(
+                fontSize: 15.5,
+                fontWeight: FontWeight.w700,
               ),
+            ),
+            SizedBox(width: 8),
+            Icon(Icons.arrow_forward_rounded, size: 18),
+          ],
+        ),
       ),
     );
   }

@@ -254,7 +254,8 @@ class DatabaseHelper {
   Future<void> addIncomeAndSync(Income income) async {
     final id = await addincome(income);
     await syncIncome(id);
-    await _refreshBudgetsForIncomeOrExpense(income.userid, income.source, income.date);
+    await _refreshBudgetsForIncomeOrExpense(
+        income.userid, income.source, income.date);
   }
 
   Future<void> syncPendingIncomes() async {
@@ -328,15 +329,15 @@ class DatabaseHelper {
 
     if (result.isEmpty) return;
 
-    final expense = result.first;
+    final expenseRow = result.first;
 
     try {
       await FirebaseDatabase.instance.ref('expense/$id').set({
-        'amount': expense['amount'],
-        'description': expense['description'],
-        'source': expense['source'],
-        'userid': expense['userid'],
-        'date': expense['date'],
+        'amount': expenseRow['amount'],
+        'description': expenseRow['description'],
+        'source': expenseRow['source'],
+        'userid': expenseRow['userid'],
+        'date': expenseRow['date'],
       });
 
       await db.update(
@@ -353,7 +354,8 @@ class DatabaseHelper {
   Future<void> addexpenseAndSync(expense expense) async {
     final id = await addexpense(expense);
     await syncexpense(id);
-    await _refreshBudgetsForIncomeOrExpense(expense.userid, expense.source, expense.date);
+    await _refreshBudgetsForIncomeOrExpense(
+        expense.userid, expense.source, expense.date);
   }
 
   Future<void> syncPendingexpense() async {
@@ -366,14 +368,44 @@ class DatabaseHelper {
 
       final pending = await getPendingexpense(user.userId);
 
-      for (final expense in pending) {
-        if (expense.id != null) {
-          await syncexpense(expense.id!);
+      for (final exp in pending) {
+        if (exp.id != null) {
+          await syncexpense(exp.id!);
         }
       }
     } finally {
       _isSyncingExpense = false;
     }
+  }
+
+  Future<void> insertTransactionIfNotExists(TransactionModel txn) async {
+    final db = await getDatabase();
+    final table = txn.type == 'income' ? 'income' : 'expenses';
+
+    final dateStr = txn.date.toIso8601String();
+    final amount = txn.amount;
+    final source = txn.source;
+    final desc = txn.description;
+    final uid = txn.userId;
+
+    final existing = await db.query(
+      table,
+      where:
+      'userid = ? AND amount = ? AND source = ? AND date = ? AND description = ?',
+      whereArgs: [uid, amount, source, dateStr, desc],
+      limit: 1,
+    );
+
+    if (existing.isNotEmpty) return;
+
+    await db.insert(table, {
+      'amount': amount,
+      'description': desc,
+      'source': source,
+      'userid': uid,
+      'status': 'synced',
+      'date': dateStr,
+    });
   }
 
   Future<double> getTotalIncome(String userId) async {
@@ -446,7 +478,8 @@ class DatabaseHelper {
     return list;
   }
 
-  TransactionModel _rowToTransaction(Map<String, dynamic> row, String type) {
+  TransactionModel _rowToTransaction(
+      Map<String, dynamic> row, String type) {
     return TransactionModel(
       id: row['id'] as int?,
       userId: (row['userid'] ?? '') as String,
@@ -503,6 +536,7 @@ class DatabaseHelper {
     if (status != null) data['status'] = status;
     await db.update('goals', data, where: 'id = ?', whereArgs: [id]);
   }
+
   Future<void> addSavingsExpense({
     required String userId,
     required double amount,
@@ -543,7 +577,8 @@ class DatabaseHelper {
     return await db.insert('budgets', map);
   }
 
-  Future<List<BudgetModel>> getBudgets(String userId, {String? month}) async {
+  Future<List<BudgetModel>> getBudgets(String userId,
+      {String? month}) async {
     final db = await getDatabase();
     final rows = await db.query(
       'budgets',
@@ -569,7 +604,8 @@ class DatabaseHelper {
     await db.delete('budgets', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<double> getBudgetSpent(String userId, String category, String month) async {
+  Future<double> getBudgetSpent(
+      String userId, String category, String month) async {
     final db = await getDatabase();
     final result = await db.rawQuery(
       '''
@@ -584,7 +620,8 @@ class DatabaseHelper {
 
   Future<void> refreshBudgetStatus(int id) async {
     final db = await getDatabase();
-    final rows = await db.query('budgets', where: 'id = ?', whereArgs: [id]);
+    final rows =
+    await db.query('budgets', where: 'id = ?', whereArgs: [id]);
     if (rows.isEmpty) return;
 
     final row = rows.first;
@@ -612,8 +649,7 @@ class DatabaseHelper {
       DateTime date,
       ) async {
     final db = await getDatabase();
-    final month =
-        '${date.year}-${date.month.toString().padLeft(2, '0')}';
+    final month = '${date.year}-${date.month.toString().padLeft(2, '0')}';
     final matches = await db.query(
       'budgets',
       where: 'userid = ? AND category = ? AND month = ?',
@@ -626,7 +662,8 @@ class DatabaseHelper {
 
   Future<void> syncBudget(int id) async {
     final db = await getDatabase();
-    final result = await db.query('budgets', where: 'id = ?', whereArgs: [id]);
+    final result =
+    await db.query('budgets', where: 'id = ?', whereArgs: [id]);
     if (result.isEmpty) return;
 
     final budget = result.first;
@@ -640,7 +677,8 @@ class DatabaseHelper {
         'status': budget['status'],
       });
 
-      await db.update('budgets', {'synced': 1}, where: 'id = ?', whereArgs: [id]);
+      await db.update('budgets', {'synced': 1},
+          where: 'id = ?', whereArgs: [id]);
     } catch (e) {
       print('SYNC FAILED for budget id=$id: $e');
     }

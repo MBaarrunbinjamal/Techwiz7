@@ -162,9 +162,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   String _formatMoney(double v) {
-    if (v >= 1000000) return 'Rs ${(v / 1000000).toStringAsFixed(2)}M';
-    if (v >= 1000) return 'Rs ${(v / 1000).toStringAsFixed(1)}K';
-    return 'Rs ${v.toStringAsFixed(0)}';
+    if (v >= 1000000) return '\$${(v / 1000000).toStringAsFixed(2)}M';
+    if (v >= 1000) return '\$${(v / 1000).toStringAsFixed(1)}K';
+    return '\$${v.toStringAsFixed(0)}';
   }
 
   @override
@@ -429,7 +429,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Avg / Student',
                 _totalStudents > 0
                     ? _formatMoney(_totalIncome / _totalStudents)
-                    : 'Rs 0',
+                    : '\$0',
                 'Income per user',
                 'AVG',
                 const Color(0xFFF1F8E9),
@@ -721,7 +721,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF1B5E20))),
-                    const Text('PKR',
+                    const Text('USD',
                         style: TextStyle(fontSize: 12, color: Colors.grey)),
                   ],
                 ),
