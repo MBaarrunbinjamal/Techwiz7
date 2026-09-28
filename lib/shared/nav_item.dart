@@ -20,7 +20,18 @@ class NavItem extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: color, size: 24),
+        Opacity(
+          opacity: active ? 1.0 : 0.55,
+          child: Image.asset(
+            'assets/logo.png',
+            width: 24,
+            height: 24,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(icon, color: color, size: 24);
+            },
+          ),
+        ),
         const SizedBox(height: 2),
         Text(
           label,

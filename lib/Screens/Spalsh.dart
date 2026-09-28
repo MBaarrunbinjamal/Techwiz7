@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 class Splash extends StatefulWidget {
   const Splash({super.key});
 
@@ -33,10 +34,15 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 2600));
-    _fade = CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.3, curve: Curves.easeOut));
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 2600));
+    _fade = CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.3, curve: Curves.easeOut));
     _scale = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.3, curve: Curves.easeOutBack)),
+      CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(0.0, 0.3, curve: Curves.easeOutBack)),
     );
     _controller.forward().whenComplete(_openNext);
   }
@@ -55,10 +61,13 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final isDark =
+        MediaQuery.platformBrightnessOf(context) == Brightness.dark;
     final bgColor = isDark ? SplashColors.darkBg : SplashColors.lightBg;
-    final titleColor = isDark ? SplashColors.darkTitle : SplashColors.deepGreen;
-    final mutedColor = isDark ? SplashColors.mutedDark : SplashColors.mutedLight;
+    final titleColor =
+    isDark ? SplashColors.darkTitle : SplashColors.deepGreen;
+    final mutedColor =
+    isDark ? SplashColors.mutedDark : SplashColors.mutedLight;
     final chipColor = isDark ? SplashColors.darkPeach : SplashColors.peach;
     final trackColor = isDark ? SplashColors.darkMint : SplashColors.mint;
 
@@ -83,16 +92,26 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
         child: Padding(
           padding: const EdgeInsets.only(top: 12, right: 24),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(color: chipColor, borderRadius: BorderRadius.circular(99)),
-            child: const Text('BETA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.7, color: SplashColors.amberText)),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+                color: chipColor, borderRadius: BorderRadius.circular(99)),
+            child: const Text(
+              'BETA',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.7,
+                  color: SplashColors.amberText),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _centerContent(Color bgColor, Color titleColor, Color mutedColor, Color chipColor) {
+  Widget _centerContent(Color bgColor, Color titleColor, Color mutedColor,
+      Color chipColor) {
     return Center(
       child: FadeTransition(
         opacity: _fade,
@@ -105,18 +124,39 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
               const SizedBox(height: 26),
               Text.rich(
                 TextSpan(children: [
-                  TextSpan(text: 'Penny', style: TextStyle(color: titleColor)),
-                  const TextSpan(text: 'Pal', style: TextStyle(color: SplashColors.green)),
+                  TextSpan(
+                      text: 'Penny',
+                      style: TextStyle(color: titleColor)),
+                  const TextSpan(
+                      text: 'Pal',
+                      style: TextStyle(color: SplashColors.green)),
                 ]),
-                style: const TextStyle(fontSize: 38, fontWeight: FontWeight.w800, letterSpacing: -0.8),
+                style: const TextStyle(
+                    fontSize: 38,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.8),
               ),
               const SizedBox(height: 10),
-              Text('Track every penny,\nhive your wealth.', textAlign: TextAlign.center, style: TextStyle(fontSize: 15, height: 1.5, color: mutedColor)),
+              Text(
+                'Track every penny,\nhive your wealth.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 15, height: 1.5, color: mutedColor),
+              ),
               const SizedBox(height: 22),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                decoration: BoxDecoration(color: chipColor, borderRadius: BorderRadius.circular(99)),
-                child: const Text('NextGen BudgetBee', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: SplashColors.amberText)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                    color: chipColor,
+                    borderRadius: BorderRadius.circular(99)),
+                child: const Text(
+                  'NextGen BudgetBee',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: SplashColors.amberText),
+                ),
               ),
             ],
           ),
@@ -125,7 +165,8 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
     );
   }
 
-  Widget _bottomSection(Color titleColor, Color mutedColor, Color trackColor) {
+  Widget _bottomSection(
+      Color titleColor, Color mutedColor, Color trackColor) {
     return Positioned(
       left: 32,
       right: 32,
@@ -138,9 +179,18 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
             children: [
               _progressBar(trackColor),
               const SizedBox(height: 12),
-              Text('Syncing your student accounts...', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: titleColor)),
+              Text(
+                'Syncing your student accounts...',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: titleColor),
+              ),
               const SizedBox(height: 14),
-              Text('v1.0.4 - Student Edition', style: TextStyle(fontSize: 11, color: mutedColor)),
+              Text(
+                'v1.0.4 - Student Edition',
+                style: TextStyle(fontSize: 11, color: mutedColor),
+              ),
             ],
           ),
         ),
@@ -155,13 +205,16 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
         return Container(
           height: 6,
           alignment: Alignment.centerLeft,
-          decoration: BoxDecoration(color: trackColor, borderRadius: BorderRadius.circular(99)),
+          decoration: BoxDecoration(
+              color: trackColor,
+              borderRadius: BorderRadius.circular(99)),
           child: FractionallySizedBox(
             widthFactor: Curves.easeOut.transform(_controller.value),
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(99),
-                gradient: const LinearGradient(colors: [SplashColors.green, SplashColors.amber]),
+                gradient: const LinearGradient(
+                    colors: [SplashColors.green, SplashColors.amber]),
               ),
             ),
           ),
@@ -174,7 +227,10 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)])),
+      decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+              colors: [color, color.withValues(alpha: 0)])),
     );
   }
 
@@ -187,10 +243,41 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
           height: 116,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(32),
-            gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [SplashColors.green, SplashColors.deepGreen]),
-            boxShadow: [BoxShadow(color: SplashColors.green.withValues(alpha: 0.35), blurRadius: 40, offset: const Offset(0, 18))],
+            boxShadow: [
+              BoxShadow(
+                  color: SplashColors.green.withValues(alpha: 0.35),
+                  blurRadius: 40,
+                  offset: const Offset(0, 18)),
+            ],
           ),
-          child: const Icon(Icons.savings_rounded, size: 66, color: Colors.white),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: Image.asset(
+              'assets/logo.png',
+              width: 116,
+              height: 116,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 116,
+                  height: 116,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(32),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        SplashColors.green,
+                        SplashColors.deepGreen
+                      ],
+                    ),
+                  ),
+                  child: const Icon(Icons.savings_rounded,
+                      size: 66, color: Colors.white),
+                );
+              },
+            ),
+          ),
         ),
         Positioned(
           top: -10,
@@ -199,8 +286,17 @@ class _SplashState extends State<Splash> with SingleTickerProviderStateMixin {
             width: 38,
             height: 38,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: SplashColors.amber, shape: BoxShape.circle, border: Border.all(color: bgColor, width: 3)),
-            child: const Text('B', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+            decoration: BoxDecoration(
+                color: SplashColors.amber,
+                shape: BoxShape.circle,
+                border: Border.all(color: bgColor, width: 3)),
+            child: const Text(
+              'B',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white),
+            ),
           ),
         ),
       ],

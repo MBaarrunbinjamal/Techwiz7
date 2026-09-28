@@ -41,6 +41,7 @@ flutter:
 
     assets:
         - assets/icon/pennypal_logo.png
+        - assets/logo.png
 
 flutter_launcher_icons:
     android: true
