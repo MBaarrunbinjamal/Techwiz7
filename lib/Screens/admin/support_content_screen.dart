@@ -1,8 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'shared_app_bar.dart';
 
 class SupportContentScreen extends StatefulWidget {
@@ -20,12 +25,15 @@ class SupportContentScreen extends StatefulWidget {
 class _SupportContentScreenState extends State<SupportContentScreen> {
   final DatabaseReference _db = FirebaseDatabase.instance.ref();
 
+  final ImagePicker _picker = ImagePicker();
+
   int _tab = 0;
 
   bool _loadingLearning = false;
   bool _loadingFeedback = false;
   bool _loadingSupport = false;
   bool _publishing = false;
+  bool _uploadingImage = false;
 
   List<Map<String, dynamic>> _modules = [];
   List<Map<String, dynamic>> _feedback = [];
@@ -33,10 +41,12 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
 
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _imgCtrl = TextEditingController();
   final _tagCtrl = TextEditingController();
   final _readCtrl = TextEditingController();
   final _contentCtrl = TextEditingController();
+
+  File? _selectedImage;
+  String _coverImageUrl = '';
 
   @override
   void initState() {
@@ -48,7 +58,6 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
   void dispose() {
     _titleCtrl.dispose();
     _descCtrl.dispose();
-    _imgCtrl.dispose();
     _tagCtrl.dispose();
     _readCtrl.dispose();
     _contentCtrl.dispose();
@@ -65,13 +74,18 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
 
   Future<void> _loadLearning() async {
     setState(() => _loadingLearning = true);
+
     try {
       final snap = await _db.child('learning').get();
+
       final list = <Map<String, dynamic>>[];
+
       if (snap.exists && snap.value != null) {
         final raw = snap.value;
+
         if (raw is Map) {
           final d = Map<String, dynamic>.from(raw);
+
           d.forEach((k, v) {
             if (v is Map) {
               final m = Map<String, dynamic>.from(v);
@@ -82,6 +96,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
         } else if (raw is List) {
           for (int i = 0; i < raw.length; i++) {
             final v = raw[i];
+
             if (v is Map) {
               final m = Map<String, dynamic>.from(v);
               m['_key'] = i.toString();
@@ -90,28 +105,47 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
           }
         }
       }
+
       list.sort((a, b) {
-        final ta = int.tryParse(a['publishedAt']?.toString() ?? '0') ?? 0;
-        final tb = int.tryParse(b['publishedAt']?.toString() ?? '0') ?? 0;
+        final ta =
+            int.tryParse(a['publishedAt']?.toString() ?? '0') ?? 0;
+
+        final tb =
+            int.tryParse(b['publishedAt']?.toString() ?? '0') ?? 0;
+
         return tb.compareTo(ta);
       });
-      if (mounted) setState(() => _modules = list);
+
+      if (mounted) {
+        setState(() {
+          _modules = list;
+        });
+      }
     } catch (e) {
       debugPrint('load learning error: $e');
     } finally {
-      if (mounted) setState(() => _loadingLearning = false);
+      if (mounted) {
+        setState(() {
+          _loadingLearning = false;
+        });
+      }
     }
   }
 
   Future<void> _loadFeedback() async {
     setState(() => _loadingFeedback = true);
+
     try {
       final snap = await _db.child('feedback').get();
+
       final list = <Map<String, dynamic>>[];
+
       if (snap.exists && snap.value != null) {
         final raw = snap.value;
+
         if (raw is Map) {
           final d = Map<String, dynamic>.from(raw);
+
           d.forEach((k, v) {
             if (v is Map) {
               final m = Map<String, dynamic>.from(v);
@@ -122,6 +156,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
         } else if (raw is List) {
           for (int i = 0; i < raw.length; i++) {
             final v = raw[i];
+
             if (v is Map) {
               final m = Map<String, dynamic>.from(v);
               m['_key'] = i.toString();
@@ -130,28 +165,44 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
           }
         }
       }
+
       list.sort((a, b) {
         final ta = (a['date'] ?? '').toString();
         final tb = (b['date'] ?? '').toString();
+
         return tb.compareTo(ta);
       });
-      if (mounted) setState(() => _feedback = list);
+
+      if (mounted) {
+        setState(() {
+          _feedback = list;
+        });
+      }
     } catch (e) {
       debugPrint('load feedback error: $e');
     } finally {
-      if (mounted) setState(() => _loadingFeedback = false);
+      if (mounted) {
+        setState(() {
+          _loadingFeedback = false;
+        });
+      }
     }
   }
 
   Future<void> _loadSupport() async {
     setState(() => _loadingSupport = true);
+
     try {
       final snap = await _db.child('support').get();
+
       final list = <Map<String, dynamic>>[];
+
       if (snap.exists && snap.value != null) {
         final raw = snap.value;
+
         if (raw is Map) {
           final d = Map<String, dynamic>.from(raw);
+
           d.forEach((k, v) {
             if (v is Map) {
               final m = Map<String, dynamic>.from(v);
@@ -162,6 +213,7 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
         } else if (raw is List) {
           for (int i = 0; i < raw.length; i++) {
             final v = raw[i];
+
             if (v is Map) {
               final m = Map<String, dynamic>.from(v);
               m['_key'] = i.toString();
@@ -170,79 +222,264 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
           }
         }
       }
+
       list.sort((a, b) {
         final ta = (a['date'] ?? '').toString();
         final tb = (b['date'] ?? '').toString();
+
         return tb.compareTo(ta);
       });
-      if (mounted) setState(() => _support = list);
+
+      if (mounted) {
+        setState(() {
+          _support = list;
+        });
+      }
     } catch (e) {
       debugPrint('load support error: $e');
     } finally {
-      if (mounted) setState(() => _loadingSupport = false);
+      if (mounted) {
+        setState(() {
+          _loadingSupport = false;
+        });
+      }
     }
   }
 
+  // ============================================================
+  // IMAGE PICKER
+  // ============================================================
+
+  Future<void> _pickCoverImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+
+      if (image == null) return;
+
+      setState(() {
+        _selectedImage = File(image.path);
+        _coverImageUrl = '';
+      });
+
+      await _uploadCoverImage();
+    } catch (e) {
+      debugPrint('Image selection error: $e');
+
+      _snack(
+        'Image selection failed: $e',
+        Colors.red,
+      );
+    }
+  }
+
+  // ============================================================
+  // SUPABASE IMAGE UPLOAD
+  // ============================================================
+
+  Future<void> _uploadCoverImage() async {
+    if (_selectedImage == null) return;
+
+    setState(() {
+      _uploadingImage = true;
+    });
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      final timestamp =
+          DateTime.now().millisecondsSinceEpoch;
+
+      final fileName = 'cover_$timestamp.jpg';
+
+      final filePath = 'learning/$fileName';
+
+      await supabase.storage
+          .from('learning-images')
+          .upload(
+        filePath,
+        _selectedImage!,
+        fileOptions: const FileOptions(
+          contentType: 'image/jpeg',
+          upsert: false,
+        ),
+      );
+
+      final publicUrl = supabase.storage
+          .from('learning-images')
+          .getPublicUrl(filePath);
+
+      if (mounted) {
+        setState(() {
+          _coverImageUrl = publicUrl;
+        });
+      }
+
+      _snack(
+        'Image uploaded successfully',
+        const Color(0xFF2E7D32),
+      );
+    } catch (e) {
+      debugPrint('Supabase upload error: $e');
+
+      if (mounted) {
+        setState(() {
+          _coverImageUrl = '';
+        });
+      }
+
+      _snack(
+        'Image upload failed: $e',
+        Colors.red,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploadingImage = false;
+        });
+      }
+    }
+  }
+
+  // ============================================================
+  // PUBLISH
+  // ============================================================
+
   Future<void> _publish() async {
     if (_publishing) return;
+
     final title = _titleCtrl.text.trim();
     final desc = _descCtrl.text.trim();
-    final img = _imgCtrl.text.trim();
     final tag = _tagCtrl.text.trim();
     final read = _readCtrl.text.trim();
     final content = _contentCtrl.text.trim();
 
     if (title.isEmpty || desc.isEmpty || content.isEmpty) {
-      _snack('Title, description and content are required', Colors.red);
+      _snack(
+        'Title, description and content are required',
+        Colors.red,
+      );
       return;
     }
 
-    setState(() => _publishing = true);
+    if (_selectedImage == null || _coverImageUrl.isEmpty) {
+      _snack(
+        'Please upload a cover image',
+        Colors.red,
+      );
+      return;
+    }
+
+    if (_uploadingImage) {
+      _snack(
+        'Please wait for image upload to finish',
+        Colors.orange,
+      );
+      return;
+    }
+
+    setState(() {
+      _publishing = true;
+    });
+
     try {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final user = FirebaseAuth.instance.currentUser;
-      final ref = _db.child('learning').push();
+      final now =
+          DateTime.now().millisecondsSinceEpoch;
+
+      final user =
+          FirebaseAuth.instance.currentUser;
+
+      final ref =
+      _db.child('learning').push();
+
       await ref.set({
         'title': title,
         'description': desc,
-        'coverImage': img,
+
+        // Supabase public image URL
+        'coverImage': _coverImageUrl,
+
         'tag': tag.isEmpty ? 'General' : tag,
-        'readTime': read.isEmpty ? '3 min read' : read,
+        'readTime':
+        read.isEmpty ? '3 min read' : read,
         'content': content,
-        'publishedBy': user?.email ?? 'admin',
+        'publishedBy':
+        user?.email ?? 'admin',
         'publishedAt': now,
         'isActive': true,
       });
 
       final postId = ref.key ?? '';
 
-      final usersSnap = await _db.child('users').get();
-      if (usersSnap.exists && usersSnap.value is Map) {
-        final users = Map<dynamic, dynamic>.from(usersSnap.value as Map);
-        final updates = <String, dynamic>{};
-        final uidsToNotify = <String>[];
+      // ========================================================
+      // SEND NOTIFICATIONS TO USERS
+      // ========================================================
+
+      final usersSnap =
+      await _db.child('users').get();
+
+      if (usersSnap.exists &&
+          usersSnap.value is Map) {
+        final users =
+        Map<dynamic, dynamic>.from(
+          usersSnap.value as Map,
+        );
+
+        final updates =
+        <String, dynamic>{};
+
+        final uidsToNotify =
+        <String>[];
 
         for (final entry in users.entries) {
-          final uid = entry.key.toString();
-          final userData = entry.value is Map
-              ? Map<dynamic, dynamic>.from(entry.value as Map)
+          final uid =
+          entry.key.toString();
+
+          final userData =
+          entry.value is Map
+              ? Map<dynamic, dynamic>.from(
+            entry.value as Map,
+          )
               : <dynamic, dynamic>{};
-          final role = userData['Role']?.toString().toLowerCase() ?? '';
+
+          final role =
+              userData['Role']
+                  ?.toString()
+                  .toLowerCase() ??
+                  '';
+
           if (role == 'admin') continue;
 
-          final nkey =
-              _db.child('notifications').child(uid).push().key ?? '';
+          final nkey = _db
+              .child('notifications')
+              .child(uid)
+              .push()
+              .key ??
+              '';
+
           if (nkey.isEmpty) continue;
 
-          updates['notifications/$uid/$nkey'] = {
-            'title': 'New Learning Content',
-            'body': 'Admin has published: "$title"',
-            'type': 'learning',
-            'refId': postId,
-            'createdAt': now,
-            'isRead': false,
-            'isPinned': false,
+          updates[
+          'notifications/$uid/$nkey'] = {
+            'title':
+            'New Learning Content',
+            'body':
+            'Admin has published: "$title"',
+            'type':
+            'learning',
+            'refId':
+            postId,
+            'createdAt':
+            now,
+            'isRead':
+            false,
+            'isPinned':
+            false,
           };
+
           uidsToNotify.add(uid);
         }
 
@@ -251,31 +488,63 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
         }
 
         for (final uid in uidsToNotify) {
-          await _sendPush(uid, 'New Learning Content',
-              'Admin has published: "$title"');
+          await _sendPush(
+            uid,
+            'New Learning Content',
+            'Admin has published: "$title"',
+          );
         }
       }
 
       _clear();
-      _snack('Content published & notifications sent', const Color(0xFF2E7D32));
+
+      _snack(
+        'Content published & notifications sent',
+        const Color(0xFF2E7D32),
+      );
+
       await _loadLearning();
     } catch (e) {
-      _snack('Failed: $e', Colors.red);
+      _snack(
+        'Failed: $e',
+        Colors.red,
+      );
     } finally {
-      if (mounted) setState(() => _publishing = false);
+      if (mounted) {
+        setState(() {
+          _publishing = false;
+        });
+      }
     }
   }
 
-  Future<void> _sendPush(String uid, String title, String body) async {
+  Future<void> _sendPush(
+      String uid,
+      String title,
+      String body,
+      ) async {
     try {
-      final tokenSnap = await _db.child('users/$uid/fcmToken').get();
-      if (!tokenSnap.exists || tokenSnap.value == null) return;
-      final token = tokenSnap.value.toString().trim();
+      final tokenSnap =
+      await _db.child('users/$uid/fcmToken').get();
+
+      if (!tokenSnap.exists ||
+          tokenSnap.value == null) {
+        return;
+      }
+
+      final token =
+      tokenSnap.value.toString().trim();
+
       if (token.isEmpty) return;
 
       await http.post(
-        Uri.parse('https://notificationnode.vercel.app/send-notification'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse(
+          'https://notificationnode.vercel.app/send-notification',
+        ),
+        headers: {
+          'Content-Type':
+          'application/json',
+        },
         body: jsonEncode({
           'token': token,
           'title': title,
@@ -285,189 +554,526 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
     } catch (_) {}
   }
 
-  Future<void> _toggleLearning(String key, bool current) async {
+  // ============================================================
+  // LEARNING ACTIONS
+  // ============================================================
+
+  Future<void> _toggleLearning(
+      String key,
+      bool current,
+      ) async {
     try {
-      await _db.child('learning/$key').update({'isActive': !current});
+      await _db
+          .child('learning/$key')
+          .update({
+        'isActive': !current,
+      });
+
       await _loadLearning();
     } catch (e) {
-      _snack('Toggle failed: $e', Colors.red);
+      _snack(
+        'Toggle failed: $e',
+        Colors.red,
+      );
     }
   }
 
-  Future<void> _deleteLearning(String key) async {
-    final ok = await showDialog<bool>(
+  Future<void> _deleteLearning(
+      String key,
+      ) async {
+    final ok =
+    await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete this content?'),
-        content: const Text('This cannot be undone.'),
+        title:
+        const Text('Delete this content?'),
+        content:
+        const Text('This cannot be undone.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            onPressed: () =>
+                Navigator.pop(ctx, false),
+            child:
+            const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete',
-                style: TextStyle(color: Colors.red)),
+            onPressed: () =>
+                Navigator.pop(ctx, true),
+            child: const Text(
+              'Delete',
+              style:
+              TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
+
     if (ok != true) return;
+
     try {
-      await _db.child('learning/$key').remove();
+      await _db
+          .child('learning/$key')
+          .remove();
+
       await _loadLearning();
-      _snack('Deleted', Colors.grey);
+
+      _snack(
+        'Deleted',
+        Colors.grey,
+      );
     } catch (e) {
-      _snack('Delete failed: $e', Colors.red);
+      _snack(
+        'Delete failed: $e',
+        Colors.red,
+      );
     }
   }
 
-  Future<void> _replySupport(Map<String, dynamic> ticket) async {
-    final ctrl = TextEditingController(text: ticket['adminReply'] ?? '');
-    final reply = await showDialog<String>(
+  // ============================================================
+  // SUPPORT REPLY
+  // ============================================================
+
+  Future<void> _replySupport(
+      Map<String, dynamic> ticket,
+      ) async {
+    final ctrl = TextEditingController(
+      text: ticket['adminReply'] ?? '',
+    );
+
+    final reply =
+    await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reply to student'),
+        title:
+        const Text('Reply to student'),
         content: TextField(
           controller: ctrl,
           maxLines: 4,
-          decoration: const InputDecoration(
-            hintText: 'Type your reply...',
-            border: OutlineInputBorder(),
+          decoration:
+          const InputDecoration(
+            hintText:
+            'Type your reply...',
+            border:
+            OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            onPressed: () =>
+                Navigator.pop(ctx),
+            child:
+            const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
+            onPressed: () =>
+                Navigator.pop(
+                  ctx,
+                  ctrl.text.trim(),
+                ),
+            style:
+            ElevatedButton.styleFrom(
+              backgroundColor:
+              const Color(0xFF2E7D32),
+              foregroundColor:
+              Colors.white,
             ),
-            child: const Text('Send Reply'),
+            child:
+            const Text('Send Reply'),
           ),
         ],
       ),
     );
 
-    if (reply == null || reply.isEmpty) return;
+    ctrl.dispose();
+
+    if (reply == null ||
+        reply.isEmpty) {
+      return;
+    }
 
     try {
-      final key = ticket['_key'].toString();
-      final userId = (ticket['userId'] ?? '').toString();
-      final subject = (ticket['subject'] ?? 'Support').toString();
-      final now = DateTime.now().millisecondsSinceEpoch;
+      final key =
+      ticket['_key'].toString();
 
-      await _db.child('support/$key').update({
+      final userId =
+      (ticket['userId'] ?? '')
+          .toString();
+
+      final subject =
+      (ticket['subject'] ??
+          'Support')
+          .toString();
+
+      final now =
+          DateTime.now()
+              .millisecondsSinceEpoch;
+
+      await _db
+          .child('support/$key')
+          .update({
         'adminReply': reply,
         'status': 'replied',
         'repliedAt': now,
       });
 
       if (userId.isNotEmpty) {
-        final nkey = _db.child('notifications').child(userId).push().key ?? '';
+        final nkey = _db
+            .child('notifications')
+            .child(userId)
+            .push()
+            .key ??
+            '';
+
         if (nkey.isNotEmpty) {
-          await _db.child('notifications/$userId/$nkey').set({
-            'title': 'Support Reply',
-            'body': 'Admin replied to "$subject": $reply',
-            'type': 'support',
-            'refId': key,
-            'createdAt': now,
-            'isRead': false,
-            'isPinned': false,
+          await _db
+              .child(
+              'notifications/$userId/$nkey')
+              .set({
+            'title':
+            'Support Reply',
+            'body':
+            'Admin replied to "$subject": $reply',
+            'type':
+            'support',
+            'refId':
+            key,
+            'createdAt':
+            now,
+            'isRead':
+            false,
+            'isPinned':
+            false,
           });
         }
-        await _sendPush(userId, 'Support Reply',
-            'Admin replied to "$subject"');
+
+        await _sendPush(
+          userId,
+          'Support Reply',
+          'Admin replied to "$subject"',
+        );
       }
 
       await _loadSupport();
-      _snack('Reply sent', const Color(0xFF2E7D32));
+
+      _snack(
+        'Reply sent',
+        const Color(0xFF2E7D32),
+      );
     } catch (e) {
-      _snack('Reply failed: $e', Colors.red);
+      _snack(
+        'Reply failed: $e',
+        Colors.red,
+      );
     }
   }
+
+  // ============================================================
+  // CLEAR FORM
+  // ============================================================
 
   void _clear() {
     _titleCtrl.clear();
     _descCtrl.clear();
-    _imgCtrl.clear();
     _tagCtrl.clear();
     _readCtrl.clear();
     _contentCtrl.clear();
+
+    setState(() {
+      _selectedImage = null;
+      _coverImageUrl = '';
+      _uploadingImage = false;
+    });
   }
 
-  void _snack(String msg, Color bg) {
+  // ============================================================
+  // SNACKBAR
+  // ============================================================
+
+  void _snack(
+      String msg,
+      Color bg,
+      ) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: bg),
+
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: bg,
+      ),
     );
   }
 
+  // ============================================================
+  // PUBLISH DIALOG
+  // ============================================================
+
   Future<void> _showPublishDialog() async {
     _clear();
+
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Publish Learning Content'),
-        content: SizedBox(
-          width: 500,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text(
+              'Publish Learning Content',
+            ),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize:
+                  MainAxisSize.min,
+                  children: [
+                    _field(
+                      _titleCtrl,
+                      'Title',
+                      'Enter title',
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _field(
+                      _descCtrl,
+                      'Description',
+                      'Short description',
+                      maxLines: 2,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // =================================================
+                    // COVER IMAGE UPLOAD
+                    // =================================================
+
+                    _buildImagePicker(
+                      setDialogState,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _field(
+                      _tagCtrl,
+                      'Tag',
+                      'Beginner / Saving',
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _field(
+                      _readCtrl,
+                      'Read Time',
+                      '4 min read',
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _field(
+                      _contentCtrl,
+                      'Content',
+                      'Write content...',
+                      maxLines: 6,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                _publishing
+                    ? null
+                    : () =>
+                    Navigator.pop(ctx),
+                child:
+                const Text('Cancel'),
+              ),
+
+              ElevatedButton(
+                onPressed:
+                _publishing ||
+                    _uploadingImage
+                    ? null
+                    : () async {
+                  Navigator.pop(ctx);
+                  await _publish();
+                },
+                style:
+                ElevatedButton.styleFrom(
+                  backgroundColor:
+                  const Color(0xFF2E7D32),
+                  foregroundColor:
+                  Colors.white,
+                ),
+                child:
+                _publishing ||
+                    _uploadingImage
+                    ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child:
+                  CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color:
+                    Colors.white,
+                  ),
+                )
+                    : const Text(
+                  'Publish',
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ============================================================
+  // IMAGE PICKER UI
+  // ============================================================
+
+  Widget _buildImagePicker(
+      StateSetter setDialogState,
+      ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: Colors.grey.shade400,
+        ),
+        borderRadius:
+        BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Cover Image',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight:
+              FontWeight.w600,
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          if (_selectedImage != null)
+            ClipRRect(
+              borderRadius:
+              BorderRadius.circular(8),
+              child: Image.file(
+                _selectedImage!,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            )
+          else
+            Container(
+              height: 120,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color:
+                Colors.grey.shade100,
+                borderRadius:
+                BorderRadius.circular(8),
+              ),
+              child: const Column(
+                mainAxisAlignment:
+                MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.image_outlined,
+                    size: 40,
+                    color: Colors.grey,
+                  ),
+                  SizedBox(height: 5),
+                  Text(
+                    'No image selected',
+                    style: TextStyle(
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 10),
+
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed:
+              _uploadingImage
+                  ? null
+                  : () async {
+                await _pickCoverImage();
+
+                if (mounted) {
+                  setDialogState(
+                          () {});
+                }
+              },
+              icon: _uploadingImage
+                  ? const SizedBox(
+                width: 16,
+                height: 16,
+                child:
+                CircularProgressIndicator(
+                  strokeWidth: 2,
+                ),
+              )
+                  : const Icon(
+                Icons
+                    .photo_library_outlined,
+              ),
+              label: Text(
+                _uploadingImage
+                    ? 'Uploading...'
+                    : _selectedImage == null
+                    ? 'Upload Cover Image'
+                    : 'Change Image',
+              ),
+            ),
+          ),
+
+          if (_coverImageUrl.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            const Row(
               children: [
-                _field(_titleCtrl, 'Title', 'Enter title'),
-                const SizedBox(height: 12),
-                _field(_descCtrl, 'Description', 'Short description',
-                    maxLines: 2),
-                const SizedBox(height: 12),
-                _field(_imgCtrl, 'Cover Image URL', 'https://...'),
-                const SizedBox(height: 12),
-                _field(_tagCtrl, 'Tag', 'Beginner / Saving'),
-                const SizedBox(height: 12),
-                _field(_readCtrl, 'Read Time', '4 min read'),
-                const SizedBox(height: 12),
-                _field(_contentCtrl, 'Content', 'Write content...',
-                    maxLines: 6),
+                Icon(
+                  Icons.check_circle,
+                  size: 16,
+                  color:
+                  Color(0xFF2E7D32),
+                ),
+                SizedBox(width: 5),
+                Text(
+                  'Image uploaded successfully',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color:
+                    Color(0xFF2E7D32),
+                  ),
+                ),
               ],
             ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed:
-            _publishing ? null : () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: _publishing
-                ? null
-                : () async {
-              Navigator.pop(ctx);
-              await _publish();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
-            ),
-            child: _publishing
-                ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white),
-            )
-                : const Text('Publish'),
-          ),
+          ],
         ],
       ),
     );
   }
+
+  // ============================================================
+  // TEXT FIELD
+  // ============================================================
 
   Widget _field(
       TextEditingController c,
@@ -481,185 +1087,398 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        border: const OutlineInputBorder(),
+        border:
+        const OutlineInputBorder(),
       ),
     );
   }
 
+  // ============================================================
+  // DATE FORMAT
+  // ============================================================
+
   String _fmtDate(dynamic ts) {
     if (ts == null) return '';
+
     try {
-      final v = int.tryParse(ts.toString()) ?? 0;
+      final v =
+          int.tryParse(ts.toString()) ?? 0;
+
       if (v == 0) return '';
-      final d = DateTime.fromMillisecondsSinceEpoch(v);
-      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+      final d =
+      DateTime.fromMillisecondsSinceEpoch(
+        v,
+      );
+
+      return '${d.day.toString().padLeft(2, '0')}/'
+          '${d.month.toString().padLeft(2, '0')}/'
+          '${d.year}';
     } catch (_) {
       return '';
     }
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: SharedAppBar(
         title: 'Support & Content',
-        subtitle: 'Manage students & content',
+        subtitle:
+        'Manage students & content',
         showProfileIcon: false,
-        onOpenSettings: widget.onOpenSettings ?? () {},
+        onOpenSettings:
+        widget.onOpenSettings ??
+                () {},
       ),
+
       body: Column(
         children: [
           _buildTabs(),
-          Expanded(child: _buildTabContent()),
+          Expanded(
+            child: _buildTabContent(),
+          ),
         ],
       ),
-      floatingActionButton: _tab == 0
+
+      floatingActionButton:
+      _tab == 0
           ? FloatingActionButton.extended(
-        onPressed: _publishing ? null : _showPublishDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Publish'),
+        onPressed:
+        _publishing
+            ? null
+            : _showPublishDialog,
+        icon:
+        const Icon(Icons.add),
+        label:
+        const Text('Publish'),
       )
           : null,
     );
   }
 
+  // ============================================================
+  // TABS
+  // ============================================================
+
   Widget _buildTabs() {
-    final tabs = ['Learning', 'Feedback', 'Support'];
+    final tabs = [
+      'Learning',
+      'Feedback',
+      'Support',
+    ];
+
     return Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(4),
+      margin:
+      const EdgeInsets.all(12),
+      padding:
+      const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.grey.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(16),
+        color:
+        Colors.grey.withValues(
+          alpha: 0.15,
+        ),
+        borderRadius:
+        BorderRadius.circular(16),
       ),
       child: Row(
-        children: List.generate(tabs.length, (i) {
-          final active = _tab == i;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _tab = i),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: active
-                      ? Theme.of(context).cardColor
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    tabs[i],
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight:
-                      active ? FontWeight.bold : FontWeight.normal,
-                      color: active ? null : Colors.grey,
+        children:
+        List.generate(
+          tabs.length,
+              (i) {
+            final active =
+                _tab == i;
+
+            return Expanded(
+              child:
+              GestureDetector(
+                onTap: () =>
+                    setState(
+                          () => _tab = i,
+                    ),
+                child: Container(
+                  padding:
+                  const EdgeInsets.symmetric(
+                    vertical: 10,
+                  ),
+                  decoration:
+                  BoxDecoration(
+                    color: active
+                        ? Theme.of(
+                      context,
+                    ).cardColor
+                        : Colors
+                        .transparent,
+                    borderRadius:
+                    BorderRadius
+                        .circular(
+                      12,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      tabs[i],
+                      style:
+                      TextStyle(
+                        fontSize: 12,
+                        fontWeight: active
+                            ? FontWeight
+                            .bold
+                            : FontWeight
+                            .normal,
+                        color: active
+                            ? null
+                            : Colors.grey,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          },
+        ),
       ),
     );
   }
 
+  // ============================================================
+  // TAB CONTENT
+  // ============================================================
+
   Widget _buildTabContent() {
-    if (_tab == 0) return _buildLearningTab();
-    if (_tab == 1) return _buildFeedbackTab();
+    if (_tab == 0) {
+      return _buildLearningTab();
+    }
+
+    if (_tab == 1) {
+      return _buildFeedbackTab();
+    }
+
     return _buildSupportTab();
   }
 
+  // ============================================================
+  // LEARNING TAB
+  // ============================================================
+
   Widget _buildLearningTab() {
     if (_loadingLearning) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child:
+        CircularProgressIndicator(),
+      );
     }
+
     if (_modules.isEmpty) {
-      return const Center(child: Text('No content yet'));
+      return const Center(
+        child:
+        Text('No content yet'),
+      );
     }
+
     return RefreshIndicator(
       onRefresh: _loadLearning,
       child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: _modules.length,
-        itemBuilder: (context, i) {
-          final m = _modules[i];
-          final key = m['_key'].toString();
-          final title = (m['title'] ?? '').toString();
-          final desc = (m['description'] ?? '').toString();
-          final tag = (m['tag'] ?? '').toString();
-          final read = (m['readTime'] ?? '').toString();
-          final img = (m['coverImage'] ?? '').toString();
-          final active = m['isActive'] != false;
-          final date = _fmtDate(m['publishedAt']);
+        padding:
+        const EdgeInsets.all(12),
+        itemCount:
+        _modules.length,
+        itemBuilder:
+            (context, i) {
+          final m =
+          _modules[i];
+
+          final key =
+          m['_key'].toString();
+
+          final title =
+          (m['title'] ?? '')
+              .toString();
+
+          final desc =
+          (m['description'] ?? '')
+              .toString();
+
+          final tag =
+          (m['tag'] ?? '')
+              .toString();
+
+          final read =
+          (m['readTime'] ?? '')
+              .toString();
+
+          final img =
+          (m['coverImage'] ?? '')
+              .toString();
+
+          final active =
+              m['isActive'] != false;
+
+          final date =
+          _fmtDate(
+            m['publishedAt'],
+          );
 
           return Card(
-            margin: const EdgeInsets.only(bottom: 12),
+            margin:
+            const EdgeInsets.only(
+              bottom: 12,
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding:
+              const EdgeInsets.all(
+                12,
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
                 children: [
                   Row(
                     children: [
                       Expanded(
-                        child: Text('$tag • $read',
-                            style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey,
-                                fontWeight: FontWeight.bold)),
+                        child: Text(
+                          '$tag • $read',
+                          style:
+                          const TextStyle(
+                            fontSize: 10,
+                            color:
+                            Colors.grey,
+                            fontWeight:
+                            FontWeight
+                                .bold,
+                          ),
+                        ),
                       ),
+
                       Switch(
                         value: active,
-                        onChanged: (_) => _toggleLearning(key, active),
-                        activeColor: const Color(0xFF2E7D32),
+                        onChanged: (_) =>
+                            _toggleLearning(
+                              key,
+                              active,
+                            ),
+                        activeColor:
+                        const Color(
+                          0xFF2E7D32,
+                        ),
                       ),
                     ],
                   ),
+
                   if (img.isNotEmpty)
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
+                      borderRadius:
+                      BorderRadius
+                          .circular(
+                        10,
+                      ),
+                      child:
+                      Image.network(
                         img,
                         height: 140,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          height: 140,
-                          color: Colors.grey.shade200,
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.image_not_supported),
-                        ),
+                        width:
+                        double.infinity,
+                        fit:
+                        BoxFit.cover,
+                        errorBuilder:
+                            (_, __, ___) =>
+                            Container(
+                              height: 140,
+                              color: Colors
+                                  .grey
+                                  .shade200,
+                              alignment:
+                              Alignment
+                                  .center,
+                              child:
+                              const Icon(
+                                Icons
+                                    .image_not_supported,
+                              ),
+                            ),
                       ),
                     ),
-                  const SizedBox(height: 10),
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+
+                  const SizedBox(
+                    height: 10,
+                  ),
+
+                  Text(
+                    title,
+                    style:
+                    const TextStyle(
+                      fontSize: 16,
+                      fontWeight:
+                      FontWeight
+                          .bold,
+                    ),
+                  ),
+
                   if (desc.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(desc,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 12, color: Colors.grey)),
+                    const SizedBox(
+                      height: 4,
+                    ),
+                    Text(
+                      desc,
+                      maxLines: 2,
+                      overflow:
+                      TextOverflow
+                          .ellipsis,
+                      style:
+                      const TextStyle(
+                        fontSize: 12,
+                        color:
+                        Colors.grey,
+                      ),
+                    ),
                   ],
-                  const SizedBox(height: 8),
+
+                  const SizedBox(
+                    height: 8,
+                  ),
+
                   Row(
                     children: [
                       if (date.isNotEmpty)
-                        Text(date,
-                            style: const TextStyle(
-                                fontSize: 10, color: Colors.grey)),
+                        Text(
+                          date,
+                          style:
+                          const TextStyle(
+                            fontSize: 10,
+                            color:
+                            Colors.grey,
+                          ),
+                        ),
+
                       const Spacer(),
+
                       TextButton.icon(
-                        onPressed: () => _deleteLearning(key),
-                        icon: const Icon(Icons.delete,
-                            size: 16, color: Colors.red),
-                        label: const Text('Delete',
-                            style: TextStyle(
-                                fontSize: 11, color: Colors.red)),
+                        onPressed: () =>
+                            _deleteLearning(
+                              key,
+                            ),
+                        icon:
+                        const Icon(
+                          Icons.delete,
+                          size: 16,
+                          color:
+                          Colors.red,
+                        ),
+                        label:
+                        const Text(
+                          'Delete',
+                          style:
+                          TextStyle(
+                            fontSize: 11,
+                            color:
+                            Colors.red,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -671,60 +1490,135 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
       ),
     );
   }
+
+  // ============================================================
+  // FEEDBACK TAB
+  // ============================================================
 
   Widget _buildFeedbackTab() {
     if (_loadingFeedback) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child:
+        CircularProgressIndicator(),
+      );
     }
+
     if (_feedback.isEmpty) {
-      return const Center(child: Text('No feedback yet'));
+      return const Center(
+        child:
+        Text('No feedback yet'),
+      );
     }
+
     return RefreshIndicator(
       onRefresh: _loadFeedback,
       child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: _feedback.length,
-        itemBuilder: (context, i) {
-          final f = _feedback[i];
-          final rating = f['rating'] ?? 0;
-          final comments = (f['comments'] ?? '').toString();
-          final date = (f['date'] ?? '').toString();
-          final uid = (f['userId'] ?? '').toString();
+        padding:
+        const EdgeInsets.all(12),
+        itemCount:
+        _feedback.length,
+        itemBuilder:
+            (context, i) {
+          final f =
+          _feedback[i];
+
+          final rating =
+              f['rating'] ?? 0;
+
+          final comments =
+          (f['comments'] ?? '')
+              .toString();
+
+          final date =
+          (f['date'] ?? '')
+              .toString();
+
+          final uid =
+          (f['userId'] ?? '')
+              .toString();
 
           return Card(
-            margin: const EdgeInsets.only(bottom: 10),
+            margin:
+            const EdgeInsets.only(
+              bottom: 10,
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding:
+              const EdgeInsets.all(
+                12,
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
                 children: [
                   Row(
                     children: [
-                      ...List.generate(5, (idx) {
-                        return Icon(
-                          idx < (rating is int ? rating : 0)
-                              ? Icons.star
-                              : Icons.star_border,
-                          size: 16,
-                          color: Colors.amber,
-                        );
-                      }),
+                      ...List.generate(
+                        5,
+                            (idx) {
+                          return Icon(
+                            idx <
+                                (rating
+                                is int
+                                    ? rating
+                                    : 0)
+                                ? Icons.star
+                                : Icons
+                                .star_border,
+                            size: 16,
+                            color:
+                            Colors.amber,
+                          );
+                        },
+                      ),
+
                       const Spacer(),
+
                       if (date.isNotEmpty)
                         Text(
-                          date.length > 10 ? date.substring(0, 10) : date,
-                          style: const TextStyle(
-                              fontSize: 10, color: Colors.grey),
+                          date.length >
+                              10
+                              ? date.substring(
+                            0,
+                            10,
+                          )
+                              : date,
+                          style:
+                          const TextStyle(
+                            fontSize: 10,
+                            color:
+                            Colors.grey,
+                          ),
                         ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(comments,
-                      style: const TextStyle(fontSize: 13)),
-                  const SizedBox(height: 6),
-                  Text('User: $uid',
-                      style: const TextStyle(
-                          fontSize: 10, color: Colors.grey)),
+
+                  const SizedBox(
+                    height: 8,
+                  ),
+
+                  Text(
+                    comments,
+                    style:
+                    const TextStyle(
+                      fontSize: 13,
+                    ),
+                  ),
+
+                  const SizedBox(
+                    height: 6,
+                  ),
+
+                  Text(
+                    'User: $uid',
+                    style:
+                    const TextStyle(
+                      fontSize: 10,
+                      color:
+                      Colors.grey,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -734,103 +1628,263 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
     );
   }
 
+  // ============================================================
+  // SUPPORT TAB
+  // ============================================================
+
   Widget _buildSupportTab() {
     if (_loadingSupport) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child:
+        CircularProgressIndicator(),
+      );
     }
+
     if (_support.isEmpty) {
-      return const Center(child: Text('No support queries yet'));
+      return const Center(
+        child:
+        Text('No support queries yet'),
+      );
     }
+
     return RefreshIndicator(
       onRefresh: _loadSupport,
       child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: _support.length,
-        itemBuilder: (context, i) {
-          final s = _support[i];
-          final subject = (s['subject'] ?? '').toString();
-          final message = (s['message'] ?? '').toString();
-          final email = (s['userEmail'] ?? '').toString();
-          final status = (s['status'] ?? 'open').toString();
-          final reply = (s['adminReply'] ?? '').toString();
-          final date = (s['date'] ?? '').toString();
+        padding:
+        const EdgeInsets.all(12),
+        itemCount:
+        _support.length,
+        itemBuilder:
+            (context, i) {
+          final s =
+          _support[i];
+
+          final subject =
+          (s['subject'] ?? '')
+              .toString();
+
+          final message =
+          (s['message'] ?? '')
+              .toString();
+
+          final email =
+          (s['userEmail'] ?? '')
+              .toString();
+
+          final status =
+          (s['status'] ??
+              'open')
+              .toString();
+
+          final reply =
+          (s['adminReply'] ?? '')
+              .toString();
+
+          final date =
+          (s['date'] ?? '')
+              .toString();
 
           return Card(
-            margin: const EdgeInsets.only(bottom: 10),
+            margin:
+            const EdgeInsets.only(
+              bottom: 10,
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding:
+              const EdgeInsets.all(
+                12,
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
                 children: [
                   Row(
                     children: [
                       Expanded(
-                        child: Text(subject,
-                            style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: status == 'replied'
-                              ? const Color(0xFFE8F5E9)
-                              : const Color(0xFFFFF3E0),
-                          borderRadius: BorderRadius.circular(10),
+                        child: Text(
+                          subject,
+                          style:
+                          const TextStyle(
+                            fontSize: 14,
+                            fontWeight:
+                            FontWeight
+                                .bold,
+                          ),
                         ),
-                        child: Text(status,
-                            style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: status == 'replied'
-                                    ? const Color(0xFF2E7D32)
-                                    : const Color(0xFFEF6C00))),
+                      ),
+
+                      Container(
+                        padding:
+                        const EdgeInsets
+                            .symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration:
+                        BoxDecoration(
+                          color: status ==
+                              'replied'
+                              ? const Color(
+                            0xFFE8F5E9,
+                          )
+                              : const Color(
+                            0xFFFFF3E0,
+                          ),
+                          borderRadius:
+                          BorderRadius
+                              .circular(
+                            10,
+                          ),
+                        ),
+                        child: Text(
+                          status,
+                          style:
+                          TextStyle(
+                            fontSize: 9,
+                            fontWeight:
+                            FontWeight
+                                .bold,
+                            color: status ==
+                                'replied'
+                                ? const Color(
+                              0xFF2E7D32,
+                            )
+                                : const Color(
+                              0xFFEF6C00,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(message, style: const TextStyle(fontSize: 12)),
-                  const SizedBox(height: 6),
-                  Text('$email • ${date.length > 10 ? date.substring(0, 10) : date}',
-                      style: const TextStyle(
-                          fontSize: 10, color: Colors.grey)),
+
+                  const SizedBox(
+                    height: 6,
+                  ),
+
+                  Text(
+                    message,
+                    style:
+                    const TextStyle(
+                      fontSize: 12,
+                    ),
+                  ),
+
+                  const SizedBox(
+                    height: 6,
+                  ),
+
+                  Text(
+                    '$email • ${date.length > 10 ? date.substring(0, 10) : date}',
+                    style:
+                    const TextStyle(
+                      fontSize: 10,
+                      color:
+                      Colors.grey,
+                    ),
+                  ),
+
                   if (reply.isNotEmpty) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(
+                      height: 8,
+                    ),
+
                     Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                          color: const Color(0xFFE8F5E9),
-                          borderRadius: BorderRadius.circular(8)),
+                      padding:
+                      const EdgeInsets
+                          .all(8),
+                      decoration:
+                      BoxDecoration(
+                        color:
+                        const Color(
+                          0xFFE8F5E9,
+                        ),
+                        borderRadius:
+                        BorderRadius
+                            .circular(
+                          8,
+                        ),
+                      ),
                       child: Row(
                         children: [
-                          const Icon(Icons.reply,
-                              size: 14, color: Color(0xFF2E7D32)),
-                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.reply,
+                            size: 14,
+                            color:
+                            Color(
+                              0xFF2E7D32,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            width: 6,
+                          ),
+
                           Expanded(
-                            child: Text('You: $reply',
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF2E7D32))),
+                            child: Text(
+                              'You: $reply',
+                              style:
+                              const TextStyle(
+                                fontSize: 11,
+                                color:
+                                Color(
+                                  0xFF2E7D32,
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ],
-                  const SizedBox(height: 10),
+
+                  const SizedBox(
+                    height: 10,
+                  ),
+
                   Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _replySupport(s),
-                      icon: const Icon(Icons.send, size: 14),
+                    alignment:
+                    Alignment
+                        .centerRight,
+                    child:
+                    ElevatedButton
+                        .icon(
+                      onPressed: () =>
+                          _replySupport(
+                            s,
+                          ),
+                      icon:
+                      const Icon(
+                        Icons.send,
+                        size: 14,
+                      ),
                       label: Text(
-                          reply.isEmpty ? 'Reply' : 'Update Reply',
-                          style: const TextStyle(fontSize: 11)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2E7D32),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                        reply.isEmpty
+                            ? 'Reply'
+                            : 'Update Reply',
+                        style:
+                        const TextStyle(
+                          fontSize: 11,
+                        ),
+                      ),
+                      style:
+                      ElevatedButton
+                          .styleFrom(
+                        backgroundColor:
+                        const Color(
+                          0xFF2E7D32,
+                        ),
+                        foregroundColor:
+                        Colors.white,
+                        shape:
+                        RoundedRectangleBorder(
+                          borderRadius:
+                          BorderRadius
+                              .circular(
+                            8,
+                          ),
+                        ),
                       ),
                     ),
                   ),

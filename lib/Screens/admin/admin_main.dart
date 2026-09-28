@@ -31,9 +31,7 @@ class _AdminMainState extends State<AdminMain> {
       UserManagementScreen(
         onOpenSettings: openSettings,
       ),
-      SupportContentScreen(
-        onOpenSettings: openSettings,
-      ),
+      SupportContentScreen(),
       AnalyticsScreen(
         onOpenSettings: openSettings,
       ),
