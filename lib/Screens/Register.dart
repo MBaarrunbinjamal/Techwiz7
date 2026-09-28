@@ -141,7 +141,13 @@ class _RegisterState extends State<Register> {
       centerTitle: true,
       automaticallyImplyLeading: false,
       leading: IconButton(
-        onPressed: () => Navigator.maybePop(context),
+        onPressed: () {
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          } else {
+            Navigator.pushReplacementNamed(context, '/login');
+          }
+        },
         icon: const Icon(Icons.arrow_back_rounded, color: AppColors.title),
       ),
       title: Row(
@@ -334,7 +340,13 @@ class _RegisterState extends State<Register> {
   Widget _loginLink() {
     return Center(
       child: GestureDetector(
-        onTap: () => Navigator.maybePop(context),
+        onTap: () {
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          } else {
+            Navigator.pushReplacementNamed(context, '/login');
+          }
+        },
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
