@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:techwiz7/Screens/Login.dart';
 import 'package:techwiz7/Screens/emailverification.dart';
 
-/// Shows [child] only for signed-in users with a verified email.
 class Authguard extends StatelessWidget {
   final Widget child;
 

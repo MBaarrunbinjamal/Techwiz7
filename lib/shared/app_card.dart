@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:techwiz7/shared/app_colors.dart';
 
-/// White rounded card with the standard border used across the app.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;

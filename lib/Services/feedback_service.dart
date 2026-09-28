@@ -2,9 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:techwiz7/Models/app_feedback.dart';
 
-// All feedback for one student lives under feedback/{uid}/{feedbackId}.
-// Keeping it under the uid lets a security rule scope access to the owner,
-// and lets the admin read the whole feedback node in one place.
+
 class FeedbackService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseDatabase _db = FirebaseDatabase.instance;

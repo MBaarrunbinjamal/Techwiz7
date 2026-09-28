@@ -3,11 +3,10 @@ import 'package:techwiz7/Models/goal.dart';
 import 'package:techwiz7/Database_helper/DatabaseHelper.dart';
 import 'package:techwiz7/Services/PrefsService.dart';
 
-// Small result returned by deposit so the screen can show a message
-// when a milestone is reached or the goal is completed.
+
 class DepositResult {
-  final int milestone; // milestone reached after this deposit (0/25/50/75/100)
-  final bool completed; // true when this deposit finished the goal
+  final int milestone;
+  final bool completed;
   DepositResult({required this.milestone, required this.completed});
 }
 
@@ -15,8 +14,7 @@ class GoalService {
   final FirebaseDatabase _db = FirebaseDatabase.instance;
   final DatabaseHelper _local = DatabaseHelper.instance;
 
-  // One id for goals and transactions, the same id the dashboard, expenses,
-  // and budgets use. This keeps every feature on the same account.
+
   Future<String?> _uid() => PrefsService.instance.getUserId();
 
   Future<List<Goal>> getGoals() async {
@@ -32,10 +30,7 @@ class GoalService {
     await _push(uid, goal);
   }
 
-  // Adds money to a goal, records the deposit as a Savings expense so the
-  // money leaves the wallet, marks any milestone, and auto archives at 100%.
-  // Written so the saved amount and the expense always apply, even if the
-  // goal lookup misses, so a deposit can never fail silently.
+
   Future<DepositResult> deposit(
       String id,
       double amount,
@@ -46,16 +41,16 @@ class GoalService {
       return DepositResult(milestone: 0, completed: false);
     }
 
-    // 1) Raise the goal's saved amount. This is keyed by id, not uid.
+
     final newSaved = currentSaved + amount;
     await _local.updateSaved(id, newSaved);
 
-    // Find the goal for its title and progress.
+
     final goals = await _local.getGoals(uid);
     final match = goals.where((x) => x.id == id).toList();
     final title = match.isNotEmpty ? match.first.title : 'goal';
 
-    // 2) Record the deposit as a Savings expense under the shared id.
+
     await _local.addSavingsExpense(
       userId: uid,
       amount: amount,
@@ -63,7 +58,7 @@ class GoalService {
       date: DateTime.now(),
     );
 
-    // 3) Milestone and auto archive, only when the goal was found.
+
     int reached = 0;
     bool completed = false;
     if (match.isNotEmpty) {

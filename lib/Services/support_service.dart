@@ -2,9 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:techwiz7/Models/support_query.dart';
 
-// All support messages for one student live under support/{uid}/{queryId}.
-// Keeping it under the uid lets a security rule scope access to the owner,
-// and lets the admin read the whole support node in one place.
+
 class SupportService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseDatabase _db = FirebaseDatabase.instance;
@@ -43,7 +41,6 @@ class SupportService {
 
   // Read --------------------------------------------------------------
 
-  // Live list. Use it on an admin screen or to show the student past queries.
   Stream<List<SupportQuery>> watchAll() {
     final ref = _rootRef;
     if (ref == null) return Stream.value(const <SupportQuery>[]);
@@ -57,13 +54,12 @@ class SupportService {
           .map((row) => SupportQuery.fromMap(Map<String, dynamic>.from(row as Map)))
           .toList();
 
-      list.sort((a, b) => b.date.compareTo(a.date)); // newest first
+      list.sort((a, b) => b.date.compareTo(a.date));
       print('[SUPPORT LIST] ${list.length} record(s)');
       return list;
     });
   }
 
-  // One-time read, for the admin or a report.
   Future<List<SupportQuery>> fetchAll() async {
     final ref = _rootRef;
     if (ref == null) return const <SupportQuery>[];

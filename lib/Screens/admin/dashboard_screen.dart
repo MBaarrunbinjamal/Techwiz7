@@ -3,12 +3,10 @@ import 'package:firebase_database/firebase_database.dart';
 import 'shared_app_bar.dart';
 
 class DashboardScreen extends StatefulWidget {
-  final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
 
   const DashboardScreen({
     Key? key,
-    required this.onOpenNotifications,
     required this.onOpenSettings,
   }) : super(key: key);
 
@@ -31,7 +29,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> _recentUsers = [];
   bool _isLoading = true;
 
-  int _selectedTab = 0; // 0=Overview, 1=Users, 2=Content, 3=Analytics
+  int _selectedTab = 0;
+
 
   @override
   void initState() {
@@ -43,7 +42,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // ============ USERS ============
+
       final usersSnap = await _db.child('users').get();
       int activeCount = 0;
       int totalCount = 0;
@@ -176,7 +175,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: 'Admin Console',
         subtitle: 'Super Admin View',
         showProfileIcon: true,
-        onOpenNotifications: widget.onOpenNotifications,
         onOpenSettings: widget.onOpenSettings,
       ),
       body: _isLoading

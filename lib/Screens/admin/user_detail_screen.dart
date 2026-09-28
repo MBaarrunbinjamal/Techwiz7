@@ -47,13 +47,11 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     });
 
     try {
-      // 1. User profile
       final profileSnap = await _db.child('users/${widget.userId}').get();
       if (profileSnap.exists && profileSnap.value is Map) {
         _userProfile = Map<String, dynamic>.from(profileSnap.value as Map);
       }
 
-      // 2. Income — List + Map dono handle
       final incomeSnap = await _db.child('income').get();
       if (incomeSnap.exists && incomeSnap.value != null) {
         final raw = incomeSnap.value;
@@ -84,7 +82,6 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         }
       }
 
-      // 3. Expense — List + Map dono handle
       final expenseSnap = await _db.child('expense').get();
       if (expenseSnap.exists && expenseSnap.value != null) {
         final raw = expenseSnap.value;
@@ -115,7 +112,6 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         }
       }
 
-      // Sort by date — latest first
       _income.sort((a, b) {
         final da = (a['date'] ?? '').toString();
         final db = (b['date'] ?? '').toString();
@@ -156,7 +152,6 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         title: widget.userName,
         subtitle: widget.userEmail,
         showProfileIcon: false,
-        onOpenNotifications: () {},
         onOpenSettings: () {},
       ),
       body: _isLoading
@@ -447,7 +442,6 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
 
   Widget _buildExpenseTile(Map<String, dynamic> item) {
     final amount = _parseAmount(item['amount']);
-    // Expense me category ya source ho sakta hai
     final category = (item['category'] ?? item['source'] ?? 'Expense').toString();
     final desc = (item['description'] ?? item['descript'] ?? '').toString();
     final date = (item['date'] ?? '').toString();

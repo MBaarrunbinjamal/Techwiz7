@@ -3,12 +3,10 @@ import 'package:firebase_database/firebase_database.dart';
 import 'shared_app_bar.dart';
 
 class AnalyticsScreen extends StatefulWidget {
-  final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
 
   const AnalyticsScreen({
     Key? key,
-    required this.onOpenNotifications,
     required this.onOpenSettings,
   }) : super(key: key);
 
@@ -247,7 +245,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         title: 'Analytics & Reports',
         subtitle: 'Real-time aggregate metrics',
         showProfileIcon: true,
-        onOpenNotifications: widget.onOpenNotifications,
         onOpenSettings: widget.onOpenSettings,
       ),
       body: _isLoading

@@ -12,7 +12,7 @@ import 'package:techwiz7/shared/penny_bottom_nav.dart';
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'budget_planner.dart';
-import 'profile.dart'; // ✅ NEW — profile screen import
+import 'profile.dart';
 
 class Dashboard extends StatefulWidget {
   @override
@@ -126,7 +126,6 @@ class _Dashboard extends State<Dashboard> {
     );
   }
 
-  // ✅ NEW — profile screen open karo
   void _openProfile() {
     Navigator.push(
       context,
@@ -171,7 +170,6 @@ class _Dashboard extends State<Dashboard> {
     );
   }
 
-  // ✅ UPDATED — profile icon added on LEFT of notification
   Widget _topBar() {
     return Row(
       children: [
@@ -195,7 +193,6 @@ class _Dashboard extends State<Dashboard> {
         ),
         const Spacer(),
 
-        // ✅ NEW — Profile icon (notification ke left)
         GestureDetector(
           onTap: _openProfile,
           child: Container(
@@ -214,7 +211,6 @@ class _Dashboard extends State<Dashboard> {
 
         const SizedBox(width: 12),
 
-        // Notification icon (existing)
         Stack(
           clipBehavior: Clip.none,
           children: [

@@ -122,7 +122,6 @@ class AuthService {
       }
     }
 
-    // Offline login
     final localUser = await DatabaseHelper().Loginuser(
       email,
       password,

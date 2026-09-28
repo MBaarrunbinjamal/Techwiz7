@@ -11,7 +11,7 @@ class BudgetService {
     required String userId,
     required String category,
     required double limit,
-    required String month, // 'YYYY-MM'
+    required String month,
   }) async {
     final budget = BudgetModel(
       userId: userId,
@@ -22,14 +22,11 @@ class BudgetService {
     await _db.addBudgetAndSync(budget);
   }
 
-  /// All budgets for a user, optionally filtered to one month.
-  /// Call refreshAllStatuses() first if you want up-to-date 'exceeded' flags.
+
   Future<List<BudgetModel>> getBudgets(String userId, {String? month}) async {
     return _db.getBudgets(userId, month: month);
   }
 
-  /// Each budget paired with its live spent amount — this is what the
-  /// UI progress bar / "PKR X of Y spent" text should bind to.
   Future<List<BudgetProgress>> getBudgetsWithProgress(
       String userId, {
         String? month,
@@ -50,14 +47,10 @@ class BudgetService {
 
   Future<void> deleteBudget(int id) async {
     await _db.deleteBudget(id);
-    // No remote delete call exists yet for other tables either (income/
-    // expense/goals only ever push updates) — add one here if you later
-    // need deletes to remove the Firebase node too.
+
   }
 
-  /// Recomputes 'active'/'exceeded' for every budget this user has.
-  /// Call this on the budget screen's initState, and after any income/
-  /// expense add already triggers it automatically via DatabaseHelper.
+
   Future<void> refreshAllStatuses(String userId) async {
     final budgets = await _db.getBudgets(userId);
     for (final b in budgets) {
@@ -67,15 +60,13 @@ class BudgetService {
     }
   }
 
-  /// Push everything still marked unsynced. Call on app start and
-  /// whenever connectivity comes back.
+
   Future<void> syncPending() async {
     await _db.syncPendingBudgets();
   }
 }
 
-/// Pairs a budget with how much of it has actually been spent —
-/// convenient for driving a progress bar in the UI.
+
 class BudgetProgress {
   final BudgetModel budget;
   final double spent;

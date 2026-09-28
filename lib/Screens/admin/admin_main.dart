@@ -4,7 +4,6 @@ import 'user_management_screen.dart';
 import 'support_content_screen.dart';
 import 'analytics_screen.dart';
 import 'settings_screen.dart';
-import 'notifications_screen.dart';
 
 class AdminMain extends StatefulWidget {
   const AdminMain({Key? key}) : super(key: key);
@@ -27,19 +26,15 @@ class _AdminMainState extends State<AdminMain> {
   Widget build(BuildContext context) {
     final screens = [
       DashboardScreen(
-        onOpenNotifications: openNotifications,
         onOpenSettings: openSettings,
       ),
       UserManagementScreen(
-        onOpenNotifications: openNotifications,
         onOpenSettings: openSettings,
       ),
       SupportContentScreen(
-        onOpenNotifications: openNotifications,
         onOpenSettings: openSettings,
       ),
       AnalyticsScreen(
-        onOpenNotifications: openNotifications,
         onOpenSettings: openSettings,
       ),
     ];
@@ -89,12 +84,7 @@ class _AdminMainState extends State<AdminMain> {
     );
   }
 
-  void openNotifications() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-    );
-  }
+
 
   void openSettings() {
     Navigator.push(

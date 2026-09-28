@@ -149,8 +149,7 @@ class _AddExpense extends State<AddExpense> {
     };
   }
 
-  // Returns an error message when this expense would push the category over
-  // its budget for the month. Returns null when it is safe to save.
+
   Future<String?> _budgetBlockMessage(String userId,
       String category,
       double amount,
@@ -158,7 +157,7 @@ class _AddExpense extends State<AddExpense> {
     final month = '${date.year}-${date.month.toString().padLeft(2, '0')}';
     final budgets = await DatabaseHelper().getBudgets(userId, month: month);
     final match = budgets.where((b) => b.category == category).toList();
-    if (match.isEmpty) return null; // no budget for this category, so allow it
+    if (match.isEmpty) return null;
 
     final limit = match.first.limit;
     final spent = await DatabaseHelper().getBudgetSpent(
@@ -214,7 +213,6 @@ class _AddExpense extends State<AddExpense> {
       return;
     }
 
-    // Block the save when this expense would push the category over its budget.
     final blockMsg =
     await _budgetBlockMessage(userId, _selectedCategory, amount, _selectedDate);
     if (blockMsg != null) {
@@ -318,7 +316,6 @@ class _AddExpense extends State<AddExpense> {
               const SizedBox(height: 20),
               _amountBlock(),
               const SizedBox(height: 20),
-              // AI pill only shows once a category is chosen.
               if (_selectedCategory.isNotEmpty) ...[
                 _aiPill(),
                 const SizedBox(height: 22),

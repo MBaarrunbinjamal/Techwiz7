@@ -1,12 +1,11 @@
-// One feedback entry lives under feedback/{uid}/{feedbackId}.
-// Named AppFeedback because Flutter already ships a Feedback class in material.
+
 class AppFeedback {
   String id;
   String name;
   String email;
   int rating;
   String comments;
-  String userId; // uid of the signed in student
+  String userId;
   DateTime date;
 
   AppFeedback({

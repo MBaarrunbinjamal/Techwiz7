@@ -10,10 +10,8 @@ class expenseSyncService {
   StreamSubscription<List<ConnectivityResult>>? _subscription;
 
   void start() {
-    // App open hote hi ek dafa check (agar pehle se internet ho)
     DatabaseHelper().syncPendingexpense();
 
-    // Internet wapas aane par khud-ba-khud sync
     _subscription = Connectivity().onConnectivityChanged.listen((results) {
       final hasInternet = results.any((r) => r != ConnectivityResult.none);
       if (hasInternet) {

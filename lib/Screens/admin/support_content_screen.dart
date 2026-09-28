@@ -6,12 +6,10 @@ import 'package:http/http.dart' as http;
 import 'shared_app_bar.dart';
 
 class SupportContentScreen extends StatefulWidget {
-  final VoidCallback? onOpenNotifications;
   final VoidCallback? onOpenSettings;
 
   const SupportContentScreen({
     super.key,
-    this.onOpenNotifications,
     this.onOpenSettings,
   });
 
@@ -507,7 +505,6 @@ class _SupportContentScreenState extends State<SupportContentScreen> {
         title: 'Support & Content',
         subtitle: 'Manage students & content',
         showProfileIcon: false,
-        onOpenNotifications: widget.onOpenNotifications ?? () {},
         onOpenSettings: widget.onOpenSettings ?? () {},
       ),
       body: Column(

@@ -20,7 +20,7 @@ class _SavingsGoalsState extends State<SavingsGoals> {
   final _service = GoalService();
   List<Goal> _goals = [];
   bool _loading = true;
-  bool _showCompleted = false; // false = Active tab, true = Completed tab
+  bool _showCompleted = false;
 
   @override
   void initState() {

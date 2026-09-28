@@ -21,18 +21,16 @@ class _AboutScreenState extends State<AboutScreen> {
   final FeedbackService _feedbackService = FeedbackService();
   final SupportService _supportService = SupportService();
 
-  // Feedback form
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _commentsController = TextEditingController();
   bool _savingFeedback = false;
 
-  // Contact support form
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
   bool _savingContact = false;
 
-  // Signed in user, read once from the users node
+
   String _userName = '';
   String _userEmail = '';
 
@@ -52,10 +50,7 @@ class _AboutScreenState extends State<AboutScreen> {
     super.dispose();
   }
 
-  // Load user ---------------------------------------------------------
 
-  // Reads the same users node your dashboard greeting uses, so the name
-  // on every feedback and support record matches the rest of the app.
   Future<void> _loadUser() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -70,8 +65,7 @@ class _AboutScreenState extends State<AboutScreen> {
             (map['fullName'] as String?) ?? (map['name'] as String?) ?? '';
       }
     } catch (_) {
-      // Ignore, the form still works with the email alone.
-    }
+   }
 
     if (!mounted) return;
     setState(() {
@@ -101,7 +95,6 @@ class _AboutScreenState extends State<AboutScreen> {
       ..showSnackBar(SnackBar(content: Text(text)));
   }
 
-  // Submit feedback ---------------------------------------------------
 
   Future<void> _onSubmitFeedback() async {
     final name = _nameController.text.trim();
@@ -151,7 +144,6 @@ class _AboutScreenState extends State<AboutScreen> {
     }
   }
 
-  // Submit contact support --------------------------------------------
 
   Future<void> _onSubmitContact() async {
     final subject = _subjectController.text.trim();
@@ -196,7 +188,6 @@ class _AboutScreenState extends State<AboutScreen> {
     }
   }
 
-  // Build -------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +251,6 @@ class _AboutScreenState extends State<AboutScreen> {
       bottomNavigationBar: PennyBottomNav(currentIndex: 2),    );
   }
 
-  // TAB 0: ABOUT ------------------------------------------------------
 
   Widget _aboutTab() {
     return Column(
@@ -346,7 +336,6 @@ class _AboutScreenState extends State<AboutScreen> {
         ),
         const SizedBox(height: 24),
 
-        // Purpose section
         const Align(
           alignment: Alignment.centerLeft,
           child: Text('Why PennyPal Exists',
@@ -389,13 +378,9 @@ class _AboutScreenState extends State<AboutScreen> {
       ],
     );
   }
-
-  // TAB 1: FEEDBACK & SUPPORT -----------------------------------------
-
   Widget _feedbackTab() {
     return Column(
       children: [
-        // Feedback card
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -459,7 +444,6 @@ class _AboutScreenState extends State<AboutScreen> {
 
         const SizedBox(height: 24),
 
-        // Contact support card
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -479,7 +463,6 @@ class _AboutScreenState extends State<AboutScreen> {
               const Text('We reply to your registered email.',
                   style: TextStyle(color: AppColors.muted, fontSize: 12)),
               const SizedBox(height: 12),
-              // Signed in user banner
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -537,7 +520,6 @@ class _AboutScreenState extends State<AboutScreen> {
     );
   }
 
-  // Shared widgets ----------------------------------------------------
 
   Widget _submitButton({
     required String label,

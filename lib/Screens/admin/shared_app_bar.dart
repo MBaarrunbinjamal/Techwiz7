@@ -5,7 +5,6 @@ class SharedAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String subtitle;
   final bool showBackButton;
   final bool showProfileIcon;
-  final VoidCallback? onOpenNotifications;
   final VoidCallback? onOpenSettings;
 
   const SharedAppBar({
@@ -14,7 +13,6 @@ class SharedAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.subtitle,
     this.showBackButton = false,
     this.showProfileIcon = false,
-    this.onOpenNotifications,
     this.onOpenSettings,
   }) : super(key: key);
 
@@ -65,10 +63,7 @@ class SharedAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
-        IconButton(
-          icon: Icon(Icons.notifications_none, color: textColor),
-          onPressed: onOpenNotifications,
-        ),
+
         IconButton(
           icon: Icon(Icons.settings, color: textColor),
           onPressed: onOpenSettings,

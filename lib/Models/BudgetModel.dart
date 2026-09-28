@@ -3,8 +3,8 @@ class BudgetModel {
   String userId;
   String category;
   double limit;
-  String month; // 'YYYY-MM'
-  String status; // 'active' | 'exceeded'
+  String month;
+  String status;
   int synced;
 
   BudgetModel({
@@ -17,8 +17,7 @@ class BudgetModel {
     this.synced = 0,
   });
 
-  // Note: SQL column is 'budgetLimit', not 'limit' — LIMIT is a SQL keyword
-  // and can cause issues in raw queries, so we sidestep it in the schema.
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

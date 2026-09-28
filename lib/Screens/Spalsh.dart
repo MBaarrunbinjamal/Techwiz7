@@ -1,8 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-
-/// Splash is a plain screen. main.dart owns the MaterialApp and routes.
-/// After the animation it checks the signed-in user and routes.
 class Splash extends StatefulWidget {
   const Splash({super.key});
 

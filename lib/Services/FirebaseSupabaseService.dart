@@ -11,8 +11,7 @@ class FirebaseSupabaseService {
 
   // ---------------- FILE UPLOAD (Supabase Storage) ----------------
 
-  /// Uploads [file] to Supabase Storage bucket [bucketName].
-  /// Returns the public URL.
+
   Future<String> uploadFile({
     required File file,
     required String bucketName,
@@ -40,9 +39,7 @@ class FirebaseSupabaseService {
     return dot == -1 ? '' : path.substring(dot);
   }
 
-  /// Uploads [file] to Supabase, merges the resulting link into [data]
-  /// under [linkKey], then creates a new record in [tableName].
-  /// Returns the new Firebase key.
+
   Future<String> uploadFileAndSave({
     required File file,
     required String bucketName,
@@ -57,7 +54,6 @@ class FirebaseSupabaseService {
 
   // ---------------- CREATE ----------------
 
-  /// Creates a new record under [tableName]. Returns the generated key.
   Future<String> create({
     required String tableName,
     required Map<String, dynamic> data,
@@ -73,7 +69,6 @@ class FirebaseSupabaseService {
 
   // ---------------- READ ----------------
 
-  /// Table name only -> all records. Table name + id -> single record.
   Future<dynamic> read({
     required String tableName,
     String? id,
@@ -91,7 +86,6 @@ class FirebaseSupabaseService {
 
   // ---------------- UPDATE ----------------
 
-  /// Updates the record [id] under [tableName] with [data].
   Future<void> update({
     required String tableName,
     required String id,
@@ -106,7 +100,6 @@ class FirebaseSupabaseService {
 
   // ---------------- DELETE ----------------
 
-  /// Deletes a single record by [id] under [tableName].
   Future<void> deleteById({
     required String tableName,
     required String id,
@@ -118,7 +111,6 @@ class FirebaseSupabaseService {
     }
   }
 
-  /// Deletes ALL records under [tableName].
   Future<void> deleteAll({
     required String tableName,
   }) async {

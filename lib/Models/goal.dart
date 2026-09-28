@@ -6,8 +6,8 @@ class Goal {
   double saved;
   double monthly;
   DateTime targetDate;
-  String status; // 'active' or 'archived'
-  int milestone; // highest milestone reached: 0, 25, 50, 75, 100
+  String status;
+  int milestone;
 
   Goal({
     required this.id,
@@ -26,17 +26,13 @@ class Goal {
   bool get isComplete => saved >= target;
   bool get isArchived => status == 'archived';
 
-  // Calendar months from now until the target date.
   int get monthsLeft {
     final now = DateTime.now();
     final m = (targetDate.year - now.year) * 12 + (targetDate.month - now.month);
     return m < 0 ? 0 : m;
   }
 
-  // FR-35 estimated completion time.
-  // Months needed at the current monthly contribution.
-  // Returns 0 when the goal is done or when no monthly amount is set.
-  // hasEstimate tells the UI whether a real number exists.
+
   bool get hasEstimate => !isComplete && monthly > 0;
 
   int get monthsToComplete {
@@ -45,9 +41,7 @@ class Goal {
     return (remaining / monthly).ceil();
   }
 
-  // FR-37 milestones.
-  // The highest milestone the current progress has passed.
-  // Used to mark milestones after a deposit and to draw the badge row.
+
   int get reachedMilestone {
     final p = percent;
     if (p >= 100) return 100;
@@ -57,7 +51,6 @@ class Goal {
     return 0;
   }
 
-  // True when the given milestone mark (25, 50, 75, 100) has been reached.
   bool milestoneReached(int mark) => percent >= mark;
 
   Map<String, dynamic> toMap() {

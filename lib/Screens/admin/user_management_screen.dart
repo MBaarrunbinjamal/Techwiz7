@@ -4,12 +4,10 @@ import 'shared_app_bar.dart';
 import 'user_detail_screen.dart';
 
 class UserManagementScreen extends StatefulWidget {
-  final VoidCallback onOpenNotifications;
   final VoidCallback onOpenSettings;
 
   const UserManagementScreen({
     Key? key,
-    required this.onOpenNotifications,
     required this.onOpenSettings,
   }) : super(key: key);
 
@@ -70,7 +68,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         final email = (user['Email'] ?? '').toString();
         final role = (user['Role'] ?? 'User').toString();
 
-        // Status logic — Firebase me field ho to use karo, warna default
         final statusField = (user['status'] ?? user['Status'] ?? '').toString();
         final isActiveField = user['isActive'];
 
@@ -87,7 +84,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           isActive = isActiveField;
           isPending = false;
         } else {
-          // Default: agar kuch nahi hai to Active maan lo
           isActive = true;
           isPending = false;
         }
@@ -98,12 +94,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           'userId': userId,
           'name': fullName.isEmpty ? 'Unknown' : fullName,
           'email': email,
-          'details': role, // Role dikhayenge (purana university text hata diya)
+          'details': role,
           'status': statusField.isNotEmpty
               ? statusField
               : (isActive ? 'Active' : 'Deactivated'),
-          'activity': '', // Firebase me abhi nahi hai
-          'balance': '',  // Firebase me abhi nahi hai
+          'activity': '',
+          'balance': '',
           'initials': initials,
           'isActive': isActive,
           'isFlagged': isFlagged,
@@ -112,7 +108,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         });
       });
 
-      // Sort by name
       loaded.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
 
       setState(() {
@@ -158,7 +153,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final userId = student['userId'];
     final isActive = student['isActive'] as bool;
 
-    // Confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -181,8 +175,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     if (confirmed != true) return;
 
     try {
-      // Firebase me status update karo
-      // NOTE: Agar team ne different field use ki hai, yahan adjust karo
+
       await _dbRef.child(userId).update({
         'isActive': !isActive,
         'status': isActive ? 'Deactivated' : 'Active',
@@ -196,7 +189,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
           ),
         );
       }
-      _loadUsers(); // refresh
+      _loadUsers();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -227,7 +220,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         title: 'User Management',
         subtitle: '${_students.length} Students',
         showProfileIcon: true,
-        onOpenNotifications: widget.onOpenNotifications,
         onOpenSettings: widget.onOpenSettings,
       ),
       body: _isLoading

@@ -31,14 +31,26 @@ class _LoginState extends State<Login> {
   }
 
   Future<void> _handleLogin() async {
+    FocusScope.of(context).unfocus();
+
     final email = emailController.text.trim();
     final password = passwordController.text;
 
-    if (email.isEmpty || password.isEmpty) {
-      _showMessage('Enter your email and password');
+    if (email.isEmpty) {
+      _showMessage('Enter your email');
       return;
     }
-    if (email == kAdminEmail && password == kAdminPassword) {
+    if (!_isValidEmail(email)) {
+      _showMessage('Enter a valid email address');
+      return;
+    }
+    if (password.isEmpty) {
+      _showMessage('Enter your password');
+      return;
+    }
+
+    if (email.toLowerCase() == kAdminEmail.toLowerCase() &&
+        password == kAdminPassword) {
       Navigator.pushNamedAndRemoveUntil(context, '/admin', (route) => false);
       return;
     }
@@ -51,30 +63,30 @@ class _LoginState extends State<Login> {
 
       if (!mounted) return;
 
-      if (user != null) {
-        // ✅ CHECK: Deactivated user?
-        final isDeactivated = await _checkIfDeactivated(user.uid);
+      if (user == null) {
+        _showMessage('Login failed. Try again.');
+        return;
+      }
 
-        if (isDeactivated) {
-          await FirebaseAuth.instance.signOut();
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Your email is deactivated by admin'),
-              backgroundColor: Color(0xFFC62828),
-              duration: Duration(seconds: 4),
-            ),
-          );
-          return;
-        }
+      final isDeactivated = await _checkIfDeactivated(user.uid);
+      if (isDeactivated) {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Your account is deactivated by admin'),
+            backgroundColor: Color(0xFFC62828),
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
 
-        // ✅ Normal flow — email verified?
-        if (user.emailVerified) {
-          Navigator.pushReplacementNamed(context, '/home');
-        } else {
-          _showMessage('Please verify your email first');
-          Navigator.pushReplacementNamed(context, '/email');
-        }
+      if (user.emailVerified) {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        _showMessage('Please verify your email first');
+        Navigator.pushReplacementNamed(context, '/email');
       }
     } on FirebaseAuthException catch (e) {
       _showMessage(_authMessage(e.code));
@@ -84,8 +96,6 @@ class _LoginState extends State<Login> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  // ✅ NEW helper — Firebase Realtime DB se deactivated check
   Future<bool> _checkIfDeactivated(String uid) async {
     try {
       final snap = await FirebaseDatabase.instance.ref('users/$uid').get();
@@ -107,16 +117,28 @@ class _LoginState extends State<Login> {
 
   Future<void> _handleForgotPassword() async {
     final email = emailController.text.trim();
+
     if (email.isEmpty) {
       _showMessage('Enter your email above, then tap Forgot Password');
       return;
     }
+    if (!_isValidEmail(email)) {
+      _showMessage('Enter a valid email address');
+      return;
+    }
+
     try {
       await _auth.resetPassword(email);
+      if (!mounted) return;
       _showMessage('Password reset link sent to $email');
     } on FirebaseAuthException catch (e) {
       _showMessage(_authMessage(e.code));
     }
+  }
+
+  bool _isValidEmail(String email) {
+    final regex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    return regex.hasMatch(email);
   }
 
   String _authMessage(String code) {
